@@ -14,7 +14,7 @@ from .models import (
     DEFAULT_ESTIMATE_MIN, DEFAULT_FOCUS_HR, DEFAULT_REVISION_DAYS, DEFAULT_REVISION_MIN,
     DEFAULT_SECTION_MIN, MAX_SESSION_MIN,
     WEEKDAYS, Area, AreaKind, Commitment, DayRule, Dependency, Item, Milestone, Pace,
-    ScheduleInput, Section, Semester, Settings, WeeklyActivity, Window, round_up_to_slot,
+    TASK_TYPES, ScheduleInput, Section, Semester, Settings, WeeklyActivity, Window, round_up_to_slot,
 )
 
 END_OF_DAY = time(23, 59)
@@ -179,6 +179,9 @@ def _parse_item(raw: dict, area: Area, milestones: dict[str, Milestone]) -> Item
         toward = milestones.get(raw["counts_toward"])
         if toward is None:
             raise InputError(f"{where}: no milestone {raw['counts_toward']!r} in {area.name}")
+    task_type = raw.get("type", "other")  # untyped tasks count as other
+    if task_type not in TASK_TYPES:
+        raise InputError(f"{where}: type must be one of {', '.join(TASK_TYPES)}")
     deps = []
     for d in raw.get("depends_on", []):
         on, soft = (d, False) if isinstance(d, str) else (d["on"], bool(d.get("soft", False)))
@@ -195,6 +198,7 @@ def _parse_item(raw: dict, area: Area, milestones: dict[str, Milestone]) -> Item
         depends_on=deps,
         pace=Pace(raw.get("pace", "asap")),
         sections=sections,
+        task_type=task_type,
     )
 
 
@@ -255,6 +259,7 @@ def _parse_area(raw: dict) -> Area:
             revision_days=int(m.get("revision_days", DEFAULT_REVISION_DAYS)),
             syllabus_until=_date(m["syllabus_until"], where) if m.get("syllabus_until") else None,
             focus_hr=int(m.get("focus_hr", DEFAULT_FOCUS_HR)),
+            quiz=m.get("type") == "quiz",
         ))
     by_id = {m.id: m for m in area.milestones}
     area.items = [_parse_item(i, area, by_id) for i in raw.get("items", [])]
@@ -291,6 +296,7 @@ def _lecture_item(area: Area, day: date, ends: datetime | None) -> Item:
         counts_toward=toward,
         available_from=ends,
         lecture_date=day,
+        task_type="study",
     )
 
 
@@ -334,6 +340,7 @@ def _generate(inp: ScheduleInput) -> None:
                 available_from=m.at - timedelta(days=m.revision_days),
                 depends_on=[Dependency(on=i.id, hard=False) for i in feeds],
                 is_revision=True,
+                task_type="revision",
             ))
 
 

@@ -192,7 +192,9 @@
   .pace .sub { display: block; }
   .xbar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--bg); margin: 4px 0 2px; }
   .xbar div { height: 100%; }
-  .k-lecture { background: var(--accent); } .k-task { background: var(--warn); } .k-revision { background: var(--good); }
+  .k-study { background: var(--accent); } .k-assignment { background: var(--warn); }
+  .k-other { background: var(--muted); } .k-revision { background: var(--good); }
+  .ttype { font-size: 11px; color: var(--muted); margin-left: 6px; }
   .key { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin: 0 4px 0 10px; }
   .exrow { margin-bottom: 12px; }
   .exrow .row { display: flex; justify-content: space-between; gap: 8px; }
@@ -260,7 +262,7 @@
           Then each subject's classes, exams and tasks are handled together, and lectures to study are added after each class.</li>
         <li><b>Set when you can study</b> in <i>Settings</i>: paint your free time on the weekly grid and set how many hours a day you want to study.</li>
         <li><b>Add your work</b> with <i>+ Add</i>: a study task (with a due date or for an exam), a fixed-time event, or a hobby.
-          Add exams from a subject's page. HeadStart plans it all into your free time and re-plans as you log sessions.</li>
+          Add exams and quizzes from a subject's page. HeadStart plans it all into your free time and re-plans as you log sessions.</li>
       </ol>
       <div class="actions">
         <button class="primary" id="guide-subjects">Add subjects</button>
@@ -469,9 +471,13 @@
 <!-- add an exam -->
 <div class="backdrop" id="exam-modal">
   <div class="card modal">
-    <h3 id="em-heading">Add an exam</h3>
+    <h3 id="em-heading">Add an exam or quiz</h3>
     <div class="meta" id="em-meta">Lectures after the previous exam count toward it, and a revision item is planned before it.</div>
-    <div class="field"><label>Title</label><input id="em-title" placeholder="e.g. RP Endsem"></div>
+    <div class="radios" id="em-type-row">
+      <label><input type="radio" name="em-type" value="exam" checked> Exam</label>
+      <label><input type="radio" name="em-type" value="quiz"> Quiz</label>
+    </div>
+    <div class="field"><label>Title</label><input id="em-title" placeholder="e.g. RP Endsem, LAA Quiz 2"></div>
     <div class="field"><label>Date</label><input id="em-date" type="date"></div>
     <div class="radios" style="gap:8px">
       <div class="field" style="flex:1"><label>Start (optional)</label><input id="em-start" type="time"></div>
@@ -520,8 +526,10 @@
           <option value="other">Other (not a course, still counts as work)</option>
         </select></div>
     </div>
-    <div class="field"><label>Title</label><input id="tm-title" placeholder="e.g. Assignment 7"></div>
-    <div class="field"><label>Time needed</label><input id="tm-hours" class="dur" placeholder="e.g. 50m or 1h 30m" value="2h"></div>
+    <div class="field"><label>Type</label><select id="tm-type"><option value="study">Study: a chapter, topic, lecture or notes</option><option value="assignment">Assignment: problem set, lab, homework</option><option value="other">Other: project or anything else</option></select></div>
+    <div class="field"><label>Title</label><input id="tm-title" placeholder="e.g. Assignment 7, 5C, Dynamic programming"></div>
+    <div class="field"><label>Time needed</label><input id="tm-hours" class="dur" placeholder="e.g. 50m or 1h 30m" value="2h">
+      <div class="timehint" id="tm-usual" style="margin:2px 0 0"></div></div>
     <div class="radios">
       <label><input type="radio" name="tm-kind" value="due" checked> Due date</label>
       <label><input type="radio" name="tm-kind" value="exam"> For an exam</label>
@@ -542,6 +550,7 @@
     <h3 id="ed-heading">Edit task</h3>
     <div class="meta" id="ed-meta"></div>
     <div class="field" id="ed-title-field"><label>Title</label><input id="ed-title"></div>
+    <div class="field" id="ed-type-field"><label>Type</label><select id="ed-type"><option value="study">Study: a chapter, topic, lecture or notes</option><option value="assignment">Assignment: problem set, lab, homework</option><option value="other">Other: project or anything else</option></select></div>
     <div class="field" id="ed-hours-field"><label>Time still needed</label>
       <input id="ed-hours" class="dur" placeholder="e.g. 50m or 1h 30m"></div>
     <div class="radios" id="ed-kinds">
@@ -1055,6 +1064,8 @@ async function openEdit(id) {
   $("ed-meta").textContent = it.lecture ? "A lecture keeps its name; change its hours or which exam it is for."
     : it.revision ? `Revision for ${it.toward}; change how much time it needs.` : "";
   $("ed-title-field").classList.toggle("hidden", it.lecture || it.revision);
+  $("ed-type-field").classList.toggle("hidden", it.lecture || it.revision);
+  $("ed-type").value = it.type === "revision" ? "other" : it.type;
   for (const id of ["ed-kinds", "ed-delete"]) $(id).classList.toggle("hidden", it.revision);
   $("ed-title").value = it.raw_title;
   $("ed-hours-field").classList.toggle("hidden", it.done);
@@ -1092,6 +1103,7 @@ $("ed-save").onclick = async () => {
   const body = { id: it.id, deadline };
   if (!it.lecture && !it.revision) {
     body.title = $("ed-title").value.trim();
+    body.type = $("ed-type").value;
     if (!body.title) return toast("Give the task a title.");
   }
   if (!it.done) {
@@ -1231,6 +1243,8 @@ async function openAddTask(area) {
     `<option value="__new__">+ New subject...</option>`;
   if (area) sel.value = area;
   $("tm-new-name").value = "";
+  $("tm-type").value = "study";
+  hoursTyped = false;
   fillExams();
   $("tm-title").value = "";
   $("task-modal").classList.add("open");
@@ -1242,7 +1256,20 @@ function fillExams() {
   const exams = subj ? subj.milestones.filter((m) => new Date(m.at) > new Date(PLAN.now)) : [];
   $("tm-exam").innerHTML = exams.map((m) => `<option value="${esc(m.id)}">${esc(m.title)} (${niceDate(new Date(m.at))})</option>`).join("")
     || `<option value="">No upcoming exams</option>`;
+  fillUsual();
 }
+// Time needed starts at your usual time for that type in that subject (once 3 or more are
+// finished, see Stats > Your pace), unless you've typed your own.
+const TYPE_NAMES = { study: "study tasks and lectures", assignment: "assignments", other: "other tasks" };
+let hoursTyped = false;
+function fillUsual() {
+  const subj = (SUBJECTS || []).find((s) => s.name === $("tm-area").value);
+  const type = $("tm-type").value, u = subj && subj.usual && subj.usual[type];
+  if (!hoursTyped) $("tm-hours").value = u ? fmtDur(u.min / 60) : "2h";
+  $("tm-usual").textContent = u ? `Your usual for ${subj.name} ${TYPE_NAMES[type]}: ${hm(u.min)} (from ${u.n} finished).` : "";
+}
+$("tm-hours").oninput = () => { hoursTyped = true; };
+$("tm-type").onchange = fillUsual;
 $("tm-area").onchange = fillExams;
 document.querySelectorAll('input[name="tm-kind"]').forEach((r) => (r.onchange = () => {
   const kind = document.querySelector('input[name="tm-kind"]:checked').value;
@@ -1251,7 +1278,8 @@ document.querySelectorAll('input[name="tm-kind"]').forEach((r) => (r.onchange = 
 }));
 $("tm-save").onclick = () => {
   const kind = document.querySelector('input[name="tm-kind"]:checked').value;
-  const body = { area: $("tm-area").value, title: $("tm-title").value, estimate_hr: parseDur($("tm-hours").value) };
+  const body = { area: $("tm-area").value, title: $("tm-title").value, type: $("tm-type").value,
+                 estimate_hr: parseDur($("tm-hours").value) };
   if (!body.title.trim()) return toast("Give the task a title.");
   if (!(body.estimate_hr > 0)) return toast(`Time needed must be more than 0. ${DUR_HELP}`);
   if (body.area === "__other__") body.new_area = { name: "Other", kind: "other" };
@@ -1269,9 +1297,11 @@ $("tm-save").onclick = () => {
 let examArea = null, examId = null;  // examId is set when editing an exam
 function openAddExam(area) {
   examArea = area; examId = null;
-  $("em-heading").textContent = `Add an exam to ${area}`;
-  $("em-meta").textContent = "Lectures after the previous exam count toward it, and a revision item is planned before it.";
+  $("em-heading").textContent = `Add an exam or quiz to ${area}`;
+  $("em-meta").textContent = "Lectures after the previous exam or quiz count toward it, and revision is planned before it.";
   $("em-rev-field").classList.remove("hidden");
+  $("em-type-row").classList.remove("hidden");
+  document.querySelector('input[name="em-type"][value="exam"]').checked = true;
   for (const id of ["em-date", "em-start", "em-end", "em-syl"]) $(id).value = "";
   $("em-title").value = `${area} `;
   $("em-rev").value = "6h";
@@ -1279,12 +1309,17 @@ function openAddExam(area) {
   $("exam-modal").classList.add("open");
   $("em-title").focus();
 }
+document.querySelectorAll('input[name="em-type"]').forEach((r) => (r.onchange = () => {
+  const quiz = document.querySelector('input[name="em-type"]:checked').value === "quiz";
+  if (["6h", "1h", ""].includes($("em-rev").value.trim())) $("em-rev").value = quiz ? "1h" : "6h";
+}));
 function openEditExam(area, id) {
   const m = SUBJECTS.find((s) => s.name === area).milestones.find((x) => x.id === id);
   examArea = area; examId = id;
   $("em-heading").textContent = `Edit ${m.title}`;
   $("em-meta").textContent = "Its tasks and revision stay with it. Change revision hours with Edit on its revision task.";
   $("em-rev-field").classList.add("hidden");
+  $("em-type-row").classList.add("hidden");
   $("em-title").value = m.title;
   $("em-date").value = m.at.slice(0, 10);
   $("em-start").value = m.start || ""; $("em-end").value = m.end || "";
@@ -1297,6 +1332,7 @@ $("em-save").onclick = async () => {
   const body = { area: examArea, title: $("em-title").value.trim(), date: $("em-date").value,
                  start: $("em-start").value, end: $("em-end").value, syllabus_until: $("em-syl").value };
   if (!examId) body.revision_hr = parseDur($("em-rev").value || "0");
+  if (!examId) body.quiz = document.querySelector('input[name="em-type"]:checked').value === "quiz";
   if (!body.title || body.title === examArea) return toast("Give the exam a title.");
   if (!body.date) return toast("Pick the exam date.");
   if (!examId && !(body.revision_hr >= 0)) return toast(`Revision time: ${DUR_HELP}`);
@@ -1329,7 +1365,7 @@ async function renderSubjects() {
   const open = subj.items.filter((i) => !i.done), done = subj.items.filter((i) => i.done);
   const row = (i) => `<tr class="${i.done ? "done" : ""}">
       <td><input type="checkbox" data-id="${esc(i.id)}" ${i.done ? "checked disabled" : ""}></td>
-      <td>${esc(i.title)}</td>
+      <td>${esc(i.title)}<span class="ttype">${i.revision ? "revision" : i.lecture ? "lecture" : i.type}</span></td>
       <td>${i.done ? "done" : hm(i.left_min) + " left"}${i.sessions_logged ? ` &middot; ${i.sessions_logged} session${i.sessions_logged > 1 ? "s" : ""}` : ""}${i.done ? `<button class="linkbtn" data-reopen="${esc(i.id)}">Reopen</button>` : ""}${i.revision && i.done ? "" : `<button class="linkbtn" data-edit="${esc(i.id)}">Edit</button>`}</td>
       <td>${i.finish_by ? niceDate(new Date(i.finish_by)) : "-"}</td>
       <td>${i.toward ? esc(i.toward) : ""}</td></tr>`;
@@ -1364,7 +1400,7 @@ async function renderSubjects() {
     <div class="toolbar">
       <button id="mark-done" class="primary" disabled>Mark selected done</button>
       <button id="subj-add">+ Add task to ${esc(subj.name)}</button>
-      <button id="subj-exam">+ Add exam</button>
+      <button id="subj-exam">+ Add exam / quiz</button>
       <button id="subj-extra">+ Extra class</button>
       <span class="sub" style="color:var(--muted)">${open.length} open, ${done.length} done</span>
     </div>
@@ -1688,18 +1724,19 @@ async function renderInsights() {
   try { ins = await api("/api/insights", null, "Loading..."); }
   catch (e) { return; }
   const ratio = (r) => r ? `<b>×${r.ratio.toFixed(2)}</b><span class="sub">${r.n} done · ${r.ratio > 1.1 ? "longer than you plan" : r.ratio < 0.9 ? "quicker than you plan" : "about as planned"}</span>` : `<span class="sub">-</span>`;
+  // Lectures from classes count with study; their per-subject estimate can be updated.
   const lec = (s) => {
     const l = s.lecture;
-    if (!l) return `<span class="sub">-</span>`;
+    if (!l) return "";
     const btn = l.suggest_min ? `<button class="linkbtn" style="margin:4px 0 0" data-pace="${esc(s.area)}" data-min="${l.suggest_min}">Use ${hm(l.suggest_min)} for future lectures</button>`
-      : l.n >= 2 ? `<span class="sub ok">✓ your estimate is about right</span>` : "";
-    return `plan ${hm(l.current_min)} → take <b>${hm(l.actual_min)}</b><span class="sub">${l.n} done</span>${btn}`;
+      : l.n >= 2 ? `<span class="sub ok">✓ lecture estimate about right</span>` : "";
+    return `<span class="sub" style="margin-top:4px">class lectures: plan ${hm(l.current_min)} → take <b>${hm(l.actual_min)}</b></span>${btn}`;
   };
   const p = ins.pace;
   $("ins-pace").innerHTML = !p.subjects.length ? `<div class="sub">Not enough data yet: finish a few tasks and log their sessions.</div>` :
-    `<table class="pace"><thead><tr><th>Subject</th><th>Lectures</th><th>Tasks</th><th>Revision</th></tr></thead><tbody>` +
+    `<table class="pace"><thead><tr><th>Subject</th><th>Lectures &amp; study</th><th>Assignments</th><th>Other</th><th>Revision</th></tr></thead><tbody>` +
     p.subjects.map((s) => `<tr><td><span class="dot" style="background:${color(s.area)}"></span>${esc(s.area)}</td>
-      <td>${lec(s)}</td><td>${ratio(s.task)}</td><td>${ratio(s.revision)}</td></tr>`).join("") + `</tbody></table>
+      <td>${ratio(s.study)}${lec(s)}</td><td>${ratio(s.assignment)}</td><td>${ratio(s.other)}</td><td>${ratio(s.revision)}</td></tr>`).join("") + `</tbody></table>
     <div class="inote" style="margin:8px 0 0">×1.33 means it took a third longer than you estimated.` +
     (p.left_out.length ? ` Left out: ${p.left_out.length} item${p.left_out.length > 1 ? "s" : ""} marked done with little time logged
       (${p.left_out.map((x) => esc(x.title.includes(x.area) ? x.title : `${x.area} ${x.title}`)).join(", ")}): covered elsewhere, e.g. in revision.` : "") + `</div>`;
@@ -1712,11 +1749,11 @@ async function renderInsights() {
     showView("stats");
   }));
 
-  const kinds = [["lecture", "lectures"], ["task", "tasks"], ["revision", "revision"]];
+  const kinds = [["study", "lectures & study"], ["assignment", "assignments"], ["other", "other"], ["revision", "revision"]];
   const top = Math.max(60, ...ins.exams.map((e) => e.total_min));
   $("ins-exams").innerHTML = !ins.exams.length ? `<div class="sub">No exams yet: add them on a subject's page.</div>` :
     ins.exams.map((e) => `<div class="exrow"><div class="row"><span><span class="dot" style="background:${color(e.area)}"></span>
-      <b>${esc(e.title)}</b> <span class="sub" style="display:inline">${niceDate(new Date(e.at))}${e.upcoming ? " · so far" : ""}</span></span>
+      <b>${esc(e.title)}</b> <span class="sub" style="display:inline">${e.quiz ? "quiz · " : ""}${niceDate(new Date(e.at))}${e.upcoming ? " · so far" : ""}</span></span>
       <b>${e.total_min ? fmtDur(e.total_min / 60) : "-"}</b></div>
       ${e.total_min ? `<div class="xbar" style="width:${e.total_min / top * 100}%">${kinds.map(([k]) => e[`${k}_min`] ? `<div class="k-${k}" style="flex:${e[`${k}_min`]}"></div>` : "").join("")}</div>` : ""}
       <div class="sub">${kinds.filter(([k]) => e[`${k}_min`]).map(([k, n]) => `${n} ${fmtDur(e[`${k}_min`] / 60)}`).join(" · ") || "nothing logged yet"}</div></div>`).join("") +

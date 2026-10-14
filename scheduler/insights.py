@@ -1,6 +1,7 @@
 """What the progress log says about the user, for the Stats page:
 
-- pace: how long things really take, per subject and kind, from finished work;
+- pace: how long things really take, per subject and kind of task (study, which takes
+  in the lectures made from classes, assignment, other, revision), from finished work;
 - exam effort: hours put into everything that counted toward each exam;
 - study times: when in the day and week the hours were studied.
 """
@@ -20,65 +21,77 @@ MIN_LECTURES = 2
 CLOSE_ENOUGH_MIN = 15
 
 
-def _kind(item: Item) -> str:
-    return "lecture" if item.lecture_date else "revision" if item.is_revision else "task"
+# The pace and effort columns. Lectures from classes count as study.
+KINDS = ("study", "assignment", "other", "revision")
+# A usual time is offered for new tasks of a type once this many are finished.
+MIN_USUAL = 3
 
 
 def _round_slot(minutes: float) -> int:
     return int(round(minutes / SLOT_MIN) * SLOT_MIN)
 
 
+def _counted(area) -> tuple[dict[str, list[Item]], list[Item]]:
+    """A subject's finished items by kind, and the ones left out (covered elsewhere)."""
+    kinds: dict[str, list[Item]] = {k: [] for k in KINDS}
+    left_out = []
+    for i in area.items:
+        if not i.done or not i.total_min:
+            continue
+        if i.spent_min < COVERED_ELSEWHERE * i.total_min:
+            left_out.append(i)
+        else:
+            kinds[i.task_type].append(i)
+    return kinds, left_out
+
+
 def pace(inp: ScheduleInput) -> dict:
-    """Per work subject: lectures (planned vs actual average, and a suggested estimate) and
-    the actual/estimate ratio for tasks and revision; plus the finished items left out."""
+    """Per work subject: the actual/estimate ratio for each kind of task, and for the
+    lectures made from classes, planned vs actual average and a suggested estimate; plus
+    the finished items left out. Also each kind's usual time (average actual time), once
+    MIN_USUAL are finished, to pre-fill new tasks."""
     subjects, left_out = [], []
     for area in inp.areas:
         if not area.kind.is_work:
             continue
-        kinds: dict[str, list[Item]] = {"lecture": [], "task": [], "revision": []}
-        for i in area.items:
-            if not i.done or not i.total_min:
-                continue
-            if i.spent_min < COVERED_ELSEWHERE * i.total_min:
-                left_out.append({"area": area.name, "title": i.title, "kind": _kind(i),
-                                 "spent_min": i.spent_min, "estimate_min": i.total_min})
-                continue
-            kinds[_kind(i)].append(i)
+        kinds, out = _counted(area)
+        left_out += [{"area": area.name, "title": i.title, "kind": i.task_type,
+                      "spent_min": i.spent_min, "estimate_min": i.total_min} for i in out]
         if not any(kinds.values()):
             continue
-        row = {"area": area.name, "lecture": None, "task": None, "revision": None}
-        lec = kinds["lecture"]
+        row = {"area": area.name, "lecture": None, "usual": {}}
+        for k in KINDS:
+            done = kinds[k]
+            est = sum(i.total_min for i in done)
+            row[k] = {"n": len(done), "ratio": round(sum(i.spent_min for i in done) / est, 2)} if done else None
+            if k != "revision" and len(done) >= MIN_USUAL:
+                row["usual"][k] = {"n": len(done), "min": _round_slot(sum(i.spent_min for i in done) / len(done))}
+        lec = [i for i in kinds["study"] if i.lecture_date]
         if lec:
             actual = sum(i.spent_min for i in lec) / len(lec)
-            planned = sum(i.total_min for i in lec) / len(lec)
             suggest = _round_slot(actual)
             row["lecture"] = {
-                "n": len(lec), "planned_min": round(planned), "actual_min": round(actual),
-                "current_min": area.lecture_estimate_min,
+                "n": len(lec), "actual_min": round(actual), "current_min": area.lecture_estimate_min,
                 "suggest_min": suggest if len(lec) >= MIN_LECTURES
                 and abs(suggest - area.lecture_estimate_min) > CLOSE_ENOUGH_MIN else None,
             }
-        for k in ("task", "revision"):
-            if kinds[k]:
-                est = sum(i.total_min for i in kinds[k])
-                row[k] = {"n": len(kinds[k]), "ratio": round(sum(i.spent_min for i in kinds[k]) / est, 2)}
         subjects.append(row)
     return {"subjects": subjects, "left_out": left_out}
 
 
 def exam_effort(inp: ScheduleInput) -> list[dict]:
-    """Hours logged on everything that counts toward each exam, by kind, in exam order."""
+    """Minutes logged on everything that counts toward each exam, by kind, in exam order."""
     out = []
     for area in inp.areas:
         for m in area.milestones:
-            split = {"lecture": 0, "task": 0, "revision": 0}
+            split = dict.fromkeys(KINDS, 0)
             for i in inp.items:
                 if i.counts_toward is m:
-                    split[_kind(i)] += i.spent_min
+                    split[i.task_type] += i.spent_min
             if not sum(split.values()) and m.over < inp.now:
                 continue  # a past exam with nothing logged (before tracking began)
             out.append({"id": m.id, "title": m.title, "area": area.name, "at": m.at.isoformat(),
-                        "upcoming": m.over >= inp.now, "total_min": sum(split.values()),
+                        "quiz": m.quiz, "upcoming": m.over >= inp.now, "total_min": sum(split.values()),
                         **{f"{k}_min": v for k, v in split.items()}})
     return sorted(out, key=lambda e: e["at"])
 

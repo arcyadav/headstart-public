@@ -93,6 +93,7 @@ Every area has a **colour**, saved in the setup file. A new area gets the first 
 ### Work items (inside a subject, lab or other area)
 
 - **Title**
+- **Type** (`type`): `study` (a chapter, topic, lecture or notes), `assignment` (problem set, lab, homework) or `other` (a project or anything else). Chosen when the task is added; a task without one counts as `other` (the app never guesses from the title). Generated lectures are study. Used by the Stats insights (pace by type, usual time).
 - **Estimate:** optional. If not given, it is the area's learned average for that kind of item. Before any data exists, it defaults to 1 hr per lecture hour for lecture study and 1.5 hr for anything else.
   - Estimates are learned **per area**. An RP lecture and a CMO lecture can take very different times, but two RP lectures are comparable.
 - **Due:** optional, the item's own deadline (e.g. assignment submission).
@@ -112,7 +113,7 @@ An item's **finish-by** is the earliest of its own due date and the date of the 
 
 ### Milestones (inside a subject or lab)
 
-A dated event with no work of its own: quiz, midsem, endsem, viva, project demo.
+A dated event with no work of its own: quiz, midsem, endsem, viva, project demo. **+ Add exam / quiz** asks which it is: a quiz (`"type": "quiz"`) is planned exactly like an exam, only its revision defaults to 1 hr instead of 6 hr in the form, and it is labelled "quiz" in Exam effort.
 
 - **Time:** optional, e.g. CMO midsem 8 Oct 11:30–13:00. Exams usually take a class slot. A timed exam blocks its time, and a class of the same subject that overlaps it doesn't happen, so it creates no lecture item. Without a time, the milestone is at 00:00 that day.
 - **Syllabus until:** optional date. Lectures after it don't count toward this exam; they count toward the next one. By default, every lecture before the exam counts.
@@ -205,8 +206,8 @@ Online it runs on Render's free plan (Docker, India time zone, waitress), built 
 
 `scheduler/insights.py`, shown on the Stats page below the daily chart, all from everything logged since tracking began:
 
-- **Pace:** per work subject, from finished items: lectures (average planned vs actual time), and actual/estimate ratios for tasks and revision. An item marked done with under 25% of its estimate logged is left out as covered elsewhere (e.g. tasks studied during revision, or skipped while ill); it says nothing about pace. With 2+ finished lectures whose average differs from the subject's lecture estimate by more than 15 min, the page offers that average (rounded to 10 min) as the new estimate. It applies only to lectures of classes still to come: the lectures of classes already held are pinned to the time they were planned with (a lecture override), so the current plan doesn't jump. Task and revision ratios are only shown, since each task is different.
-- **Exam effort:** minutes logged on every item that counts toward each exam, split into lectures, tasks and revision; past exams with nothing logged (before tracking) are left out.
+- **Pace:** per work subject, from finished items, by **type of task**: study (generated lectures count here), assignment, other, and revision: the actual/estimate ratio for each. An item marked done with under 25% of its estimate logged is left out as covered elsewhere (e.g. tasks studied during revision, or skipped while ill); it says nothing about pace. For generated lectures it also gives average planned vs actual time; with 2+ finished whose average differs from the subject's lecture estimate by more than 15 min, the page offers that average (rounded to 10 min) as the new estimate. It applies only to lectures of classes still to come: the lectures of classes already held are pinned to the time they were planned with (a lecture override), so the current plan doesn't jump. Ratios for tasks are only shown. Each type's **usual time** (average actual time, rounded to 10 min) is given once 3+ of that type are finished in that subject, and pre-fills *Time needed* when adding a task of that type.
+- **Exam effort:** minutes logged on every item that counts toward each exam or quiz, split by type (study, assignment, other, revision); past ones with nothing logged (before tracking) are left out.
 - **Study times:** minutes studied per hour of day and per weekday, counting hours, not sessions. A log entry is written when a session ends, so it is taken to start `spent_hr` earlier and its minutes are spread over the hours it covered. Only work areas count (as in the Today tally). The best stretch is the 3-hour window (wrapping past midnight) with the most minutes, shown once there are 2 h of data.
 
 ## Re-planning triggers

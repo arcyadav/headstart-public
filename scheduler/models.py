@@ -8,6 +8,7 @@ from enum import Enum
 
 SLOT_MIN = 10                  # engine time grid
 DEFAULT_ESTIMATE_MIN = 90      # a work item with no estimate
+TASK_TYPES = ("study", "assignment", "other")  # what kind of task ("type" in the setup file)
 DEFAULT_SECTION_MIN = 90       # a section with no estimate
 DEFAULT_REVISION_MIN = 180     # an exam milestone with no revision budget
 DEFAULT_REVISION_DAYS = 7      # revision becomes available this many days before the exam
@@ -126,6 +127,7 @@ class Milestone:
     end: datetime | None = None      # set when the exam has a time: it blocks that slot
     syllabus_until: date | None = None  # lectures after this date count toward the next exam
     focus_hr: int = DEFAULT_FOCUS_HR    # focus window before the exam (0 = none)
+    quiz: bool = False                  # a quiz rather than an exam ("type": "quiz"); just a label
 
     @property
     def over(self) -> datetime:
@@ -164,6 +166,7 @@ class Item:
     spent_min: int = 0                 # hours worked so far, from the progress log
     total_min: int = 0                 # the estimate from the setup file, before any progress
     lecture_date: date | None = None   # set on generated lecture items
+    task_type: str = "other"           # study, assignment or other (lectures: study)
 
     @property
     def finish_by(self) -> datetime | None:

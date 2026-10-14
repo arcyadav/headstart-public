@@ -22,7 +22,7 @@ from scheduler import InputError, load_input
 from scheduler import insights, planners, setup_file
 from scheduler.engine import Plan, solve
 from scheduler.load import END_OF_DAY, next_milestone
-from scheduler.models import Item, ScheduleInput, display_title, round_up_to_slot
+from scheduler.models import TASK_TYPES, Item, ScheduleInput, display_title, round_up_to_slot
 from scheduler.progress import append, daily, drop, entry, planned_session_min, read_log, take_back, today
 from scheduler.report import _reason, read_previous, deadline_status, next_session, problems, to_json, to_text, weekly_status
 
@@ -315,13 +315,16 @@ def reopen():
 
 @app.post("/api/tasks")
 def add_task():
-    """A new task: {area, title, estimate_hr, due?, counts_toward?, new_area?: {name, kind}}.
+    """A new task: {area, title, type (study|assignment|other), estimate_hr, due?,
+    counts_toward?, new_area?: {name, kind}}.
     With new_area, that subject/lab/other area is created first."""
     body = request.get_json()
     title = (body.get("title") or "").strip()
     if not title:
         return _error("give the task a title")
-    item = {"title": title, "estimate_hr": float(body["estimate_hr"])}
+    item = {"title": title, "type": body.get("type") or "other", "estimate_hr": float(body["estimate_hr"])}
+    if item["type"] not in TASK_TYPES:
+        return _error("pick a type: study, assignment or other")
     if body.get("due"):
         item["due"] = body["due"]
     if body.get("counts_toward"):
@@ -365,7 +368,7 @@ def _exam(body: dict, old_date: str | None = None) -> dict:
 
 @app.post("/api/exams")
 def add_exam():
-    """A new exam: {area, title, date, start?, end?, revision_hr?, syllabus_until?}."""
+    """A new exam or quiz: {area, title, date, start?, end?, revision_hr?, syllabus_until?, quiz?}."""
     body = request.get_json()
     try:
         exam = _exam(body)
@@ -374,6 +377,8 @@ def add_exam():
     if not exam["syllabus_until"]:
         del exam["syllabus_until"]
     exam["revision_hr"] = float(body.get("revision_hr") or 0)
+    if body.get("quiz"):
+        exam["type"] = "quiz"
     path = _path("input")
     before = Path(path).read_text(encoding="utf-8")
     data = setup_file.read(path)
@@ -462,6 +467,8 @@ def edit_task():
             setup_file.tidy_overrides(data)
         else:
             changes = {"due": due, "counts_toward": toward}
+            if body.get("type") in TASK_TYPES:
+                changes["type"] = body["type"]
             title = (body.get("title") or "").strip()
             if title:
                 changes["title"] = title
@@ -774,10 +781,11 @@ def subjects():
             "class_changes": raw[a.name].get("timetable_changes", []),
             "lecture_items": a.lecture_items,
             "pace": pace.get(a.name),
+            "usual": (pace.get(a.name) or {}).get("usual", {}),
             "weekly": [{"id": w.id, "title": w.title, "fixed": w.is_fixed,
                         "sessions_per_week": w.sessions_per_week, "session_min": w.session_min,
                         "weekly_min": w.weekly_min} for w in a.weekly],
-            "milestones": [{"id": m.id, "title": m.title, "at": m.at.isoformat(),
+            "milestones": [{"id": m.id, "title": m.title, "at": m.at.isoformat(), "quiz": m.quiz,
                             "start": m.end and m.at.strftime("%H:%M"),
                             "end": m.end and m.end.strftime("%H:%M"),
                             "syllabus_until": m.syllabus_until and m.syllabus_until.isoformat()}
@@ -790,7 +798,8 @@ def subjects():
                        "finish_by": i.finish_by.isoformat() if i.finish_by else None,
                        "due": i.due.date().isoformat() if i.due else None,
                        "toward": i.counts_toward.title if i.counts_toward else None,
-                       "toward_id": i.counts_toward.id if i.counts_toward else None}
+                       "toward_id": i.counts_toward.id if i.counts_toward else None,
+                       "type": i.task_type}
                       for i in a.items],
         })
     return jsonify(out)
