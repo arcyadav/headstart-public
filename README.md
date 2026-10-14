@@ -12,8 +12,9 @@ deadline is met, then re-plans as you log sessions, finish tasks or classes get 
 
 ## Use it online
 
-Open the site, then **Start my planner** for a planner of your own at a private link
-(bookmark it), or **Open the demo** to try a shared one.
+**https://headstart-1g49.onrender.com**: open it, then **Start my planner** for a planner of your own at a private link
+(bookmark it), or **Open the demo** to try a shared one. It runs on a free server that sleeps when
+nobody has used it for a while, so the first page can take about a minute to appear.
 
 ## Run it on your own computer
 
