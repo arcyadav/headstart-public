@@ -29,7 +29,10 @@
   .primary { background: var(--accent) !important; border-color: var(--accent) !important; color: #fff !important; }
   ul { color: var(--muted); padding-left: 20px; }
   h3 { margin: 34px 0 6px; font-size: 16px; }
-  .err { color: #dc2626; min-height: 1.5em; }
+  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+        overflow-x: auto; font-size: 13px; }
+  .muted { color: var(--muted); }
+  a { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -40,17 +43,30 @@
 
   <div class="cards">
     <div class="card">
-      <h2>Start your own planner</h2>
-      <p>A blank planner just for you, at its own private link: set up your semester and try everything. Bookmark the link to come back to it.</p>
-      <button class="primary" id="start">Start my planner</button>
+      <h2>Try the demo</h2>
+      <p>Set up a semester, add subjects, exams and tasks, and watch it plan. The demo is shared and
+        isn't kept: Reset wipes it, and it starts blank again whenever the server restarts.</p>
+      <a class="btn primary" href="/p/demo/">Open the demo</a>
     </div>
     <div class="card">
-      <h2>Run it on your computer</h2>
-      <p>HeadStart is open source: download it from GitHub and keep your planner on your own machine.</p>
-      <a class="btn" id="github" href="https://github.com/arcyadav/headstart-public" target="_blank" rel="noopener">Get it on GitHub</a>
+      <h2>Use it for real, on your computer</h2>
+      <p>Recommended: HeadStart is free and open source. Run it on your own computer and your planner
+        stays there; nothing is sent anywhere.</p>
+      <a class="btn" href="https://github.com/arcyadav/headstart-public" target="_blank" rel="noopener">Get it on GitHub</a>
     </div>
   </div>
-  <div class="err" id="err"></div>
+
+  <h3>Set it up on your computer</h3>
+  <p class="muted">You need <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python 3.12</a>
+    and <a href="https://git-scm.com/downloads" target="_blank" rel="noopener">Git</a>. Then, in a terminal:</p>
+  <pre>git clone https://github.com/arcyadav/headstart-public.git
+cd headstart-public
+python -m venv .venv
+.venv\Scripts\activate        (macOS/Linux: source .venv/bin/activate)
+pip install -r requirements.txt
+python app.py</pre>
+  <p class="muted">Then open <b>http://localhost:5000</b>. Next time, open a terminal in that folder and run just the
+    <code>activate</code> line and <code>python app.py</code>. Your planner is kept in the <code>data</code> folder.</p>
 
   <h3>What it does</h3>
   <ul>
@@ -60,17 +76,5 @@
     <li>Re-plans whenever you log a session, mark a task done or a class is cancelled, keeping the rest of the plan stable.</li>
   </ul>
 </main>
-<script>
-document.getElementById("start").onclick = async () => {
-  const err = document.getElementById("err");
-  err.textContent = "";
-  try {
-    const res = await fetch("api/planners", { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || res.statusText);
-    location.href = data.url;
-  } catch (e) { err.textContent = `Couldn't start a planner: ${e.message}`; }
-};
-</script>
 </body>
 </html>

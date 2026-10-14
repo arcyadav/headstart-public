@@ -11,9 +11,7 @@ import argparse
 import hmac
 import json
 import os
-import shutil
 import threading
-from contextlib import nullcontext
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -29,13 +27,12 @@ from scheduler.progress import append, daily, drop, entry, planned_session_min, 
 from scheduler.report import _reason, read_previous, deadline_status, next_session, problems, to_json, to_text, weekly_status
 
 app = Flask(__name__, static_folder="static")
-# hosted: the online site, with a home page and separate planners under /p/<id>/ (see
+# hosted: the online site, with a home page, the demo at /p/demo/ and published planners (see
 # scheduler/planners.py); otherwise the single planner in data/ on this computer.
 CONFIG = {"input": DEFAULT_INPUT, "progress": DEFAULT_PROGRESS, "now": None,
           "hosted": False, "planners": "planners"}
 LOCK = threading.Lock()  # one solve at a time
 CACHE: dict = {}  # setup file -> last plan
-SYNC: dict = {}  # on the site: the dataset keeping the planners, and its push scheduler
 
 
 def _now() -> datetime | None:
@@ -122,9 +119,10 @@ def _payload(inp: ScheduleInput, plan: Plan) -> dict:
         "weekly": weekly_status(inp, plan),
         "problems": problems(inp, plan),
         "today": today(inp, read_log(_path("progress"))),
-        # A planner without a semester shows the first screen.
+        # A planner without a semester shows the first screen; the demo has a Reset button.
         "needs_setup": sem is None,
         "hosted": CONFIG["hosted"],
+        "demo": _planner() == planners.DEMO,
     }
 
 
@@ -189,29 +187,20 @@ def pick_planner():
     if not CONFIG["hosted"]:
         return None
     pid = request.environ.get("headstart.planner")
-    if pid is None:  # the home page; it can only start a new planner
-        if request.path in ("/", "/api/planners", "/api/publish"):
+    if pid is None:  # the home page, and publish.py's route
+        if request.path in ("/", "/api/publish"):
             return None
         return _error("not found", 404)
     d = planners.folder(CONFIG["planners"], pid)
     if d is None:
-        return _error("no planner at this link; start a new one from the home page", 404)
+        return _error("no planner at this link; try the demo from the home page", 404)
     g.planner, g.paths = pid, planners.paths(d)
     return None
 
 
-@app.post("/api/planners")
-def new_planner():
-    """Start a blank planner of your own; returns its link. Hosted site only."""
-    if not CONFIG["hosted"]:
-        return _error("not found", 404)
-    pid = planners.create(CONFIG["planners"], _now())
-    return jsonify({"url": f"/p/{pid}/"})
-
-
 @app.post("/api/publish")
 def publish():
-    """Copy a planner from elsewhere (publish.py on the laptop) to the site:
+    """Copy a planner from someone's computer (publish.py) to the site, to show it online:
     {id, setup, progress}, with the site's publish token in X-Publish-Token. The token is
     the PUBLISH_TOKEN secret; without it, publishing is off."""
     token = os.environ.get("PUBLISH_TOKEN", "")
@@ -219,7 +208,7 @@ def publish():
         return _error("not allowed", 403)
     body = request.get_json()
     pid = body.get("id", "")
-    if not planners.ID.match(pid):
+    if not planners.ID.match(pid) or pid == planners.DEMO:
         return _error("bad planner id")
     with LOCK:
         d = planners.publish(CONFIG["planners"], pid, body["setup"], body["progress"])
@@ -227,20 +216,15 @@ def publish():
     return jsonify({"url": f"/p/{pid}/"})
 
 
-@app.post("/api/planner/delete")
-def delete_planner():
-    """Delete this online planner for good: its folder here and its copy in the dataset."""
-    pid = _planner()
-    if not pid:
-        return _error("only an online planner can be deleted here")
-    held = SYNC["scheduler"].lock if SYNC else nullcontext()  # not while a save is being made
-    with LOCK, held:
-        shutil.rmtree(Path(CONFIG["planners"]) / pid, ignore_errors=True)
+@app.post("/api/reset")
+def reset_demo():
+    """The demo only: wipe it back to the blank first screen."""
+    if _planner() != planners.DEMO:
+        return _error("only the demo can be reset")
+    with LOCK:
+        planners.reset(CONFIG["planners"], _now())
         CACHE.pop(_path("input"), None)
-    if SYNC:
-        from scheduler import sync
-        threading.Thread(target=sync.forget, args=(SYNC["repo"], pid, 180), daemon=True).start()
-    return jsonify({"deleted": True})
+    return jsonify(_replan(force=True))
 
 
 @app.post("/api/semester")
@@ -850,11 +834,13 @@ def main() -> None:
     if args.hosted:
         Path(args.planners).mkdir(parents=True, exist_ok=True)
         dataset = os.environ.get("HEADSTART_DATASET")
-        if dataset:  # on a Hugging Face Space: keep the planners in a private dataset
+        if dataset:  # keep published planners (only those) in a private dataset
             from scheduler import sync
-            sync.restore(args.planners, dataset)
-            SYNC.update(repo=dataset, scheduler=sync.keep(args.planners, dataset))
-            print(f"HeadStart: planners kept in dataset {dataset}")
+            kept = Path(args.planners) / planners.KEPT
+            kept.mkdir(parents=True, exist_ok=True)
+            sync.restore(kept, dataset)
+            sync.keep(kept, dataset)
+            print(f"HeadStart: published planners kept in dataset {dataset}")
         print(f"HeadStart (hosted): open http://localhost:{args.port}")
         from waitress import serve
         serve(app, host="0.0.0.0", port=args.port, threads=8)

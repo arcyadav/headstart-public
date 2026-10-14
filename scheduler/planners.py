@@ -1,21 +1,26 @@
-"""Separate planners for the hosted site: each lives in its own folder (setup.json,
-progress.json, plan.json, plan.txt) under the planners directory, named by its id. The
-id in the link is the only key, so it is long enough not to be guessed.
+"""Planners on the hosted site, each in its own folder (setup.json, progress.json,
+plan.json, plan.txt) under the planners directory:
+
+- demo/: the shared try-it-yourself planner. Never saved anywhere else: it is wiped by
+  Reset, and when the server restarts it starts blank again.
+- kept/<id>/: planners copied from someone's own computer with publish.py (the owner's,
+  to show it online). Only these are kept across restarts (see sync.py). The id in the
+  link is the only key, so it is long enough not to be guessed.
 """
 
 from __future__ import annotations
 
 import json
 import re
-import secrets
 import shutil
 from datetime import datetime
 from pathlib import Path
 
 from . import setup_file
 
+DEMO = "demo"
+KEPT = "kept"
 ID = re.compile(r"^[a-z0-9]{4,32}$")
-FILES = ("setup.json", "progress.json", "plan.json", "plan.txt")
 
 # Study slots a new planner starts with: mornings, afternoons and evenings every day,
 # with breaks for lunch and dinner. Changed on the Settings page.
@@ -35,10 +40,14 @@ def starter(now: datetime | None = None) -> dict:
 
 
 def folder(root: str | Path, planner_id: str) -> Path | None:
-    """The planner's folder, or None if the id is malformed or unknown."""
+    """The planner's folder, or None if the id is malformed or unknown. The demo is made
+    blank on first use."""
+    if planner_id == DEMO:
+        d = Path(root) / DEMO
+        return d if d.is_dir() else reset(root, now=None)
     if not ID.match(planner_id or ""):
         return None
-    d = Path(root) / planner_id
+    d = Path(root) / KEPT / planner_id
     return d if d.is_dir() else None
 
 
@@ -47,9 +56,9 @@ def paths(d: Path) -> dict[str, str]:
             "output": str(d / "plan.json")}
 
 
-def reset(root: str | Path, planner_id: str, now: datetime | None = None) -> Path:
-    """Make (or wipe) a planner back to the blank first screen."""
-    d = Path(root) / planner_id
+def reset(root: str | Path, now: datetime | None = None) -> Path:
+    """Make (or wipe) the demo, back to the blank first screen."""
+    d = Path(root) / DEMO
     if d.exists():
         shutil.rmtree(d)
     d.mkdir(parents=True)
@@ -58,18 +67,9 @@ def reset(root: str | Path, planner_id: str, now: datetime | None = None) -> Pat
     return d
 
 
-def create(root: str | Path, now: datetime | None = None) -> str:
-    """A new blank planner; returns its id."""
-    while True:
-        pid = "".join(secrets.choice("abcdefghjkmnpqrstuvwxyz23456789") for _ in range(10))
-        if not (Path(root) / pid).exists():
-            reset(root, pid, now)
-            return pid
-
-
 def publish(root: str | Path, planner_id: str, setup: dict, progress: list) -> Path:
-    """Replace a planner's data with a copy from elsewhere (e.g. the laptop)."""
-    d = Path(root) / planner_id
+    """Replace a kept planner's data with a copy from someone's computer."""
+    d = Path(root) / KEPT / planner_id
     d.mkdir(parents=True, exist_ok=True)
     setup_file.write(d / "setup.json", setup)
     (d / "progress.json").write_text(json.dumps(progress, indent=2) + "\n", encoding="utf-8")

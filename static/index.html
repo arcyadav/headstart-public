@@ -199,10 +199,11 @@
   .avail .f input { width: 100%; padding: 4px; font-size: 12px; }
   .avail .fl { font-size: 11px; color: var(--muted); padding-top: 10px; }
 
-  /* hosted: first-run guide */
+  /* hosted: demo bar, first-run guide */
+  .demobar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 20px;
+             background: color-mix(in srgb, var(--warn) 14%, var(--panel)); border-bottom: 1px solid var(--line); }
+  .demobar a { color: var(--accent); }
   .guide { margin-bottom: 16px; border-color: var(--accent); }
-  .bookmark { padding: 8px 12px; margin-bottom: 10px; border-radius: 8px;
-              background: color-mix(in srgb, var(--warn) 14%, var(--panel)); }
   .guide h2 { margin: 0 0 8px; }
   .guide ol { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 8px; }
   .guide .actions { justify-content: flex-start; flex-wrap: wrap; }
@@ -225,16 +226,17 @@
   <button id="btn-replan" title="Re-plan from the current time">Re-plan</button>
   <button id="btn-guide" title="How to set up your planner">Guide</button>
 </header>
+<div class="demobar hidden" id="demo-bar">
+  <span>This is the demo: try anything. It's shared and isn't kept: Reset wipes it, and so does the server restarting.</span>
+  <button id="btn-reset">Reset demo</button>
+  <a href="https://github.com/arcyadav/headstart-public" target="_blank" rel="noopener">Use it for real on your computer</a>
+</div>
 
 <main>
   <!-- WEEK VIEW -->
   <section id="view-week">
     <div class="card guide hidden" id="guide">
       <h2>Getting started</h2>
-      <div class="bookmark hidden" id="guide-bookmark">
-        <b>Bookmark this page to keep your planner.</b> Its link is the only way back to it: there's no login.
-        <button class="linkbtn copy-link">Copy link</button>
-      </div>
       <ol>
         <li><b>Add every subject you have this semester</b> with <i>+ Add subject</i> on the Subjects tab, with its weekly classes.
           Then each subject's classes, exams and tasks are handled together, and lectures to study are added after each class.</li>
@@ -342,17 +344,6 @@
       <div class="actions" style="justify-content:flex-start">
         <button id="st-save" class="primary">Save and re-plan</button>
         <button id="st-reset">Discard changes</button>
-      </div>
-      <div class="card hidden" id="st-planner">
-        <h2>This planner</h2>
-        <div class="sub" style="color:var(--muted);margin-bottom:8px">Bookmark this link to keep your planner: it's the
-          only way back to it (there's no login). Anyone with the link can open it, so share it only with people you trust.</div>
-        <div class="toolbar" style="margin-top:0;flex-wrap:wrap">
-          <code id="st-link" style="word-break:break-all"></code>
-          <button class="copy-link">Copy link</button>
-        </div>
-        <button id="st-delete" style="color:var(--bad)">Delete this planner</button>
-        <div class="sub" style="color:var(--muted);margin-top:6px">Removes everything in it from the site for good.</div>
       </div>
     </div>
   </section>
@@ -1673,7 +1664,7 @@ function render() {
   renderHosted();
 }
 
-// ------------------------------------------------------------------ first screen, guide
+// ------------------------------------------------------------------ first screen, guide, demo
 // The guide shows on a hosted planner until "Got it", remembered per planner in this browser.
 const GUIDE_KEY = `guide-hidden:${location.pathname}`;
 const guideHidden = () => { try { return localStorage.getItem(GUIDE_KEY) === "1"; } catch { return false; } };
@@ -1683,9 +1674,7 @@ function showGuide(on) {
 }
 function renderHosted() {
   $("nav-home").classList.toggle("hidden", !PLAN.hosted);
-  $("guide-bookmark").classList.toggle("hidden", !PLAN.hosted);
-  $("st-planner").classList.toggle("hidden", !PLAN.hosted);
-  $("st-link").textContent = location.href.split("#")[0];
+  $("demo-bar").classList.toggle("hidden", !PLAN.demo);
   if (PLAN.needs_setup) {
     $("setup-modal").classList.add("open");
     $("guide").classList.add("hidden");
@@ -1702,17 +1691,11 @@ $("su-save").onclick = async () => {
   if (PLAN.needs_setup) return renderHosted();  // it failed: back to the first screen
   showGuide(true); showView("week");
 };
-document.querySelectorAll(".copy-link").forEach((b) => (b.onclick = async () => {
-  const link = location.href.split("#")[0];
-  try { await navigator.clipboard.writeText(link); toast("Link copied. Bookmark it or keep it somewhere safe."); }
-  catch { prompt("Copy this link and keep it:", link); }
-}));
-$("st-delete").onclick = async () => {
-  if (!confirm("Delete this planner? Everything in it is removed from the site for good, and this link stops working.")) return;
-  try {
-    await api("/api/planner/delete", {}, "Deleting...");
-    location.href = "/";
-  } catch (e) { toast(e.message); }
+$("btn-reset").onclick = async () => {
+  if (!confirm("Reset the demo? Everything in it is wiped and it starts again from the first screen.")) return;
+  try { localStorage.removeItem(GUIDE_KEY); } catch {}
+  await refresh("/api/reset", {}, "Resetting the demo...");
+  showView("week");
 };
 $("btn-guide").onclick = () => { showView("week"); showGuide(true); };
 $("guide-close").onclick = () => showGuide(false);
