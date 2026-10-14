@@ -19,7 +19,7 @@ from flask import Flask, g, has_request_context, jsonify, request, send_from_dir
 
 from plan import DEFAULT_INPUT, DEFAULT_OUTPUT, DEFAULT_PROGRESS
 from scheduler import InputError, load_input
-from scheduler import planners, setup_file
+from scheduler import insights, planners, setup_file
 from scheduler.engine import Plan, solve
 from scheduler.load import END_OF_DAY, next_milestone
 from scheduler.models import Item, ScheduleInput, display_title, round_up_to_slot
@@ -762,6 +762,7 @@ def subjects():
     Hobby areas are left out."""
     inp = _load()
     raw = {a["name"]: a for a in setup_file.read(_path("input"))["areas"]}
+    pace = {p["area"]: p for p in insights.pace(inp)["subjects"]}
     out = []
     for a in inp.areas:
         if a.kind.value == "hobby":
@@ -772,6 +773,7 @@ def subjects():
                           for wd, w in a.timetable],
             "class_changes": raw[a.name].get("timetable_changes", []),
             "lecture_items": a.lecture_items,
+            "pace": pace.get(a.name),
             "weekly": [{"id": w.id, "title": w.title, "fixed": w.is_fixed,
                         "sessions_per_week": w.sessions_per_week, "session_min": w.session_min,
                         "weekly_min": w.weekly_min} for w in a.weekly],
@@ -792,6 +794,33 @@ def subjects():
                       for i in a.items],
         })
     return jsonify(out)
+
+
+@app.get("/api/insights")
+def get_insights():
+    """For the Stats page: your pace, the effort put into each exam, and when you study
+    (see scheduler/insights.py)."""
+    inp = _load()
+    return jsonify({"pace": insights.pace(inp), "exams": insights.exam_effort(inp),
+                    "times": insights.study_times(inp, read_log(_path("progress")))})
+
+
+@app.post("/api/pace")
+def use_pace():
+    """Use a new lecture estimate for a subject's classes still to come: {area,
+    lecture_hr}. Lectures of classes already held keep the time they were planned with."""
+    body = request.get_json()
+    try:
+        hours = float(body["lecture_hr"])
+        if not 0 < hours <= 12:
+            raise ValueError
+    except (KeyError, TypeError, ValueError):
+        return _error("give the lecture time in hours, more than 0")
+    inp = _load()
+    today_ = inp.now.date()
+    held = sorted({i.lecture_date.isoformat() for i in inp.items
+                   if i.area == body.get("area") and i.lecture_date and i.lecture_date <= today_})
+    return _change_setup(lambda data: setup_file.set_lecture_estimate(data, body["area"], hours, held))
 
 
 @app.get("/api/stats")

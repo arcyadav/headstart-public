@@ -185,6 +185,24 @@
   .barlabels div { flex: 1; text-align: center; font-size: 11px; color: var(--muted); padding-top: 4px; min-width: 0; overflow: hidden; }
   .barlabels .hit { color: var(--good); font-weight: 700; }
   .barlabels .today { color: var(--text); font-weight: 700; }
+  .insights { display: grid; gap: 16px; margin-top: 16px; }
+  .insights .ih { margin: 0; font-size: 15px; }
+  .inote { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+  .pace td, .pace th { padding: 6px 8px; vertical-align: top; }
+  .pace .sub { display: block; }
+  .xbar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--bg); margin: 4px 0 2px; }
+  .xbar div { height: 100%; }
+  .k-lecture { background: var(--accent); } .k-task { background: var(--warn); } .k-revision { background: var(--good); }
+  .key { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin: 0 4px 0 10px; }
+  .exrow { margin-bottom: 12px; }
+  .exrow .row { display: flex; justify-content: space-between; gap: 8px; }
+  .hourbars { display: flex; align-items: flex-end; gap: 2px; height: 90px; border-bottom: 1px solid var(--line); }
+  .hourbars div { flex: 1; background: var(--accent); border-radius: 3px 3px 0 0; min-height: 1px; }
+  .hourbars div.best { background: var(--good); }
+  .hourlabels { display: flex; gap: 2px; }
+  .hourlabels div { flex: 1; text-align: center; font-size: 10px; color: var(--muted); }
+  .wdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 12px; }
+  .wdays div { text-align: center; font-size: 12px; padding: 6px 0; border-radius: 6px; }
   .avail { display: grid; grid-template-columns: 42px repeat(7, 1fr); column-gap: 3px; user-select: none; touch-action: none; }
   .avail .h { font-size: 12px; text-align: center; font-weight: 600; padding-bottom: 2px; }
   .avail .h .sub { display: block; font-weight: 400; color: var(--muted); }
@@ -303,6 +321,26 @@
       <div style="color:var(--muted);font-size:12px" id="stat-note"></div>
       <div class="bars" id="stat-bars"></div>
       <div class="barlabels" id="stat-labels"></div>
+    </div>
+    <div class="insights">
+      <div class="card">
+        <h2 class="ih">Your pace</h2>
+        <div class="inote">How long things really take you, from work you finished. Since you started tracking.</div>
+        <div id="ins-pace"></div>
+      </div>
+      <div class="card">
+        <h2 class="ih">Exam effort</h2>
+        <div class="inote">Hours logged on everything that counts toward each exam.</div>
+        <div id="ins-exams"></div>
+      </div>
+      <div class="card">
+        <h2 class="ih">When you study</h2>
+        <div class="inote" id="ins-best"></div>
+        <div class="hourbars" id="ins-hours"></div>
+        <div class="hourlabels" id="ins-hourlabels"></div>
+        <div class="wdays" id="ins-days"></div>
+        <div class="inote" style="margin-top:8px">A session is taken to start "time spent" before you logged it, so this is approximate.</div>
+      </div>
     </div>
   </section>
 
@@ -1308,6 +1346,8 @@ async function renderSubjects() {
       <div class="sub" style="color:var(--muted);margin-top:6px">Click a class on the week view to cancel or move just that one.</div>
       <label class="sub" style="display:block;margin:6px 0"><input type="checkbox" id="subj-lectures" ${subj.lecture_items ? "checked" : ""}>
         Add a lecture to study after each class</label>
+      ${subj.pace && subj.pace.lecture ? `<div class="sub" style="color:var(--muted)">Your pace: lectures take you about
+        ${hm(subj.pace.lecture.actual_min)} (you plan ${hm(subj.pace.lecture.current_min)}), from ${subj.pace.lecture.n} finished. See Stats.</div>` : ""}
       ${subj.class_changes.map((c, n) => {
         const d = (x) => niceDate(new Date(`${x}T00:00`));
         const what = c.cancel ? `Cancelled ${d(c.cancel)}` : c.move ? `Moved ${d(c.move)} → ${d(c.to[0])} ${c.to[1]}-${c.to[2]}` : `Extra class ${d(c.extra[0])} ${c.extra[1]}-${c.extra[2]}`;
@@ -1584,6 +1624,7 @@ async function renderStats(reload) {
   if (reload || !STATS) {
     try { STATS = await api("/api/stats", null, "Loading..."); }
     catch (e) { return toast(`Couldn't load stats (${e.message}). Restart HeadStart if it was started before the Stats tab was added.`); }
+    renderInsights();
   }
   const now = new Date(PLAN.now), todayKey = isoDate(now);
   if (!statsStart) statsStart = monday(now);
@@ -1640,6 +1681,59 @@ async function renderStats(reload) {
     return `<div class="${r.key === todayKey ? "today" : ""}">${lbl}${ok ? '<div class="hit">✓</div>' : ""}</div>`;
   }).join("");
 }
+// ------------------------------------------------------------------ insights (Stats page)
+// Pace, exam effort and study times, from everything logged since tracking began.
+async function renderInsights() {
+  let ins;
+  try { ins = await api("/api/insights", null, "Loading..."); }
+  catch (e) { return; }
+  const ratio = (r) => r ? `<b>×${r.ratio.toFixed(2)}</b><span class="sub">${r.n} done · ${r.ratio > 1.1 ? "longer than you plan" : r.ratio < 0.9 ? "quicker than you plan" : "about as planned"}</span>` : `<span class="sub">-</span>`;
+  const lec = (s) => {
+    const l = s.lecture;
+    if (!l) return `<span class="sub">-</span>`;
+    const btn = l.suggest_min ? `<button class="linkbtn" style="margin:4px 0 0" data-pace="${esc(s.area)}" data-min="${l.suggest_min}">Use ${hm(l.suggest_min)} for future lectures</button>`
+      : l.n >= 2 ? `<span class="sub ok">✓ your estimate is about right</span>` : "";
+    return `plan ${hm(l.current_min)} → take <b>${hm(l.actual_min)}</b><span class="sub">${l.n} done</span>${btn}`;
+  };
+  const p = ins.pace;
+  $("ins-pace").innerHTML = !p.subjects.length ? `<div class="sub">Not enough data yet: finish a few tasks and log their sessions.</div>` :
+    `<table class="pace"><thead><tr><th>Subject</th><th>Lectures</th><th>Tasks</th><th>Revision</th></tr></thead><tbody>` +
+    p.subjects.map((s) => `<tr><td><span class="dot" style="background:${color(s.area)}"></span>${esc(s.area)}</td>
+      <td>${lec(s)}</td><td>${ratio(s.task)}</td><td>${ratio(s.revision)}</td></tr>`).join("") + `</tbody></table>
+    <div class="inote" style="margin:8px 0 0">×1.33 means it took a third longer than you estimated.` +
+    (p.left_out.length ? ` Left out: ${p.left_out.length} item${p.left_out.length > 1 ? "s" : ""} marked done with little time logged
+      (${p.left_out.map((x) => esc(x.title.includes(x.area) ? x.title : `${x.area} ${x.title}`)).join(", ")}): covered elsewhere, e.g. in revision.` : "") + `</div>`;
+  $("ins-pace").querySelectorAll("[data-pace]").forEach((b) => (b.onclick = async () => {
+    const area = b.dataset.pace, min = +b.dataset.min;
+    if (!confirm(`Plan ${hm(min)} for each ${area} lecture from now on? Lectures of classes already held keep their time.`)) return;
+    const before = PLAN;
+    await refresh("/api/pace", { area, lecture_hr: min / 60 });
+    if (PLAN !== before) toast(`${area} lectures now planned at ${hm(min)}.`);
+    showView("stats");
+  }));
+
+  const kinds = [["lecture", "lectures"], ["task", "tasks"], ["revision", "revision"]];
+  const top = Math.max(60, ...ins.exams.map((e) => e.total_min));
+  $("ins-exams").innerHTML = !ins.exams.length ? `<div class="sub">No exams yet: add them on a subject's page.</div>` :
+    ins.exams.map((e) => `<div class="exrow"><div class="row"><span><span class="dot" style="background:${color(e.area)}"></span>
+      <b>${esc(e.title)}</b> <span class="sub" style="display:inline">${niceDate(new Date(e.at))}${e.upcoming ? " · so far" : ""}</span></span>
+      <b>${e.total_min ? fmtDur(e.total_min / 60) : "-"}</b></div>
+      ${e.total_min ? `<div class="xbar" style="width:${e.total_min / top * 100}%">${kinds.map(([k]) => e[`${k}_min`] ? `<div class="k-${k}" style="flex:${e[`${k}_min`]}"></div>` : "").join("")}</div>` : ""}
+      <div class="sub">${kinds.filter(([k]) => e[`${k}_min`]).map(([k, n]) => `${n} ${fmtDur(e[`${k}_min`] / 60)}`).join(" · ") || "nothing logged yet"}</div></div>`).join("") +
+    `<div class="inote" style="margin:0">${kinds.map(([k, n]) => `<span class="key k-${k}"></span>${n}`).join("")}</div>`;
+
+  const h = ins.times.hours, hmax = Math.max(1, ...h);
+  const best = ins.times.best ? +ins.times.best.slice(0, 2) : -1;
+  const inBest = (i) => best >= 0 && ((i - best + 24) % 24) < 3;
+  $("ins-best").textContent = ins.times.best ? `You study most ${ins.times.best.replace("-", "–")}.` : "Not enough data yet: log a few sessions.";
+  $("ins-hours").innerHTML = h.map((m, i) => `<div class="${inBest(i) ? "best" : ""}" style="height:${m / hmax * 100}%"
+    title="${pad(i)}:00-${pad((i + 1) % 24)}:00: ${fmtDur(m / 60)}"></div>`).join("");
+  $("ins-hourlabels").innerHTML = h.map((_, i) => `<div>${i % 3 === 0 ? i : ""}</div>`).join("");
+  const d = ins.times.weekdays, dmax = Math.max(1, ...d);
+  $("ins-days").innerHTML = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((n, i) =>
+    `<div style="background:color-mix(in srgb, var(--accent) ${Math.round(d[i] / dmax * 70)}%, var(--bg))" title="${fmtDur(d[i] / 60)}">${n}<br><b>${fmtDur(d[i] / 60)}</b></div>`).join("");
+}
+
 function moveStats(dir) {
   if (statsMode === "week") statsStart.setDate(statsStart.getDate() + 7 * dir);
   else statsStart = new Date(statsStart.getFullYear(), statsStart.getMonth() + dir, 1);

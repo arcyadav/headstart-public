@@ -425,3 +425,17 @@ def remove_weekly_class(data: dict, area: str, day: str, start: str) -> None:
                 del a["timetable"]
             return
     raise ValueError(f"no {area} class on {day.title()} at {start}")
+
+
+def set_lecture_estimate(data: dict, area: str, hours: float, held: list[str]) -> None:
+    """A subject's new lecture estimate, for lectures of classes still to come. The
+    lectures of classes already held (`held`, their dates) keep the time they were
+    planned with, written as overrides unless they have one."""
+    from .models import DEFAULT_ESTIMATE_MIN
+
+    a, _ = _changes(data, area)
+    _tidy_changes(a)
+    old = a.get("lecture_estimate_hr", _num(DEFAULT_ESTIMATE_MIN / 60))
+    for day in held:
+        lecture_override(data, area, day).setdefault("estimate_hr", old)
+    a["lecture_estimate_hr"] = _num(hours)
