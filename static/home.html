@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HeadStart</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #6b7280; --line: #e5e7eb;
+    --accent: #2563eb; --shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111418; --panel: #1a1e24; --text: #e5e7eb; --muted: #9ca3af; --line: #2b313a;
+            --accent: #60a5fa; --shadow: none; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: var(--bg); color: var(--text); }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 16px; }
+  h1 { font-size: 34px; margin: 0 0 6px; }
+  .lead { color: var(--muted); font-size: 17px; margin: 0 0 28px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px;
+          box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px; }
+  .card h2 { font-size: 17px; margin: 0; }
+  .card p { margin: 0; color: var(--muted); flex: 1; }
+  a.btn, button { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+                  padding: 8px 14px; border-radius: 8px; cursor: pointer; text-decoration: none; text-align: center; }
+  .primary { background: var(--accent) !important; border-color: var(--accent) !important; color: #fff !important; }
+  ul { color: var(--muted); padding-left: 20px; }
+  h3 { margin: 34px 0 6px; font-size: 16px; }
+  .err { color: #dc2626; min-height: 1.5em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>HeadStart</h1>
+  <p class="lead">A study planner for your semester. Give it your classes, exams, tasks and free time,
+    and it plans when to study each thing so deadlines are met, and re-plans as you go.</p>
+
+  <div class="cards">
+    <div class="card">
+      <h2>Start your own planner</h2>
+      <p>A blank planner just for you, at its own private link. Bookmark the link to come back to it.</p>
+      <button class="primary" id="start">Start my planner</button>
+    </div>
+    <div class="card">
+      <h2>Try the demo</h2>
+      <p>A shared planner anyone can set up and play with. Its Reset button wipes it for the next person.</p>
+      <a class="btn" href="/p/demo/">Open the demo</a>
+    </div>
+    <div class="card">
+      <h2>Run it on your computer</h2>
+      <p>HeadStart is open source: download it from GitHub and keep your planner on your own machine.</p>
+      <a class="btn" id="github" href="https://github.com/arcyadav/headstart-public" target="_blank" rel="noopener">Get it on GitHub</a>
+    </div>
+  </div>
+  <div class="err" id="err"></div>
+
+  <h3>What it does</h3>
+  <ul>
+    <li>Plans study sessions into the free time you paint on a weekly grid, within your daily study limits.</li>
+    <li>Adds a lecture to study after each class, and revision before each exam.</li>
+    <li>Finishes work before its deadline, in sensible session lengths with breaks, and tells you when something can't fit.</li>
+    <li>Re-plans whenever you log a session, mark a task done or a class is cancelled, keeping the rest of the plan stable.</li>
+  </ul>
+</main>
+<script>
+document.getElementById("start").onclick = async () => {
+  const err = document.getElementById("err");
+  err.textContent = "";
+  try {
+    const res = await fetch("api/planners", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    location.href = data.url;
+  } catch (e) { err.textContent = `Couldn't start a planner: ${e.message}`; }
+};
+</script>
+</body>
+</html>

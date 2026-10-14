@@ -1,0 +1,1743 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HeadStart</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #6b7280; --line: #e5e7eb;
+    --fixed: #d9dde3; --fixed-text: #374151; --accent: #2563eb; --good: #16a34a; --warn: #d97706;
+    --bad: #dc2626; --shadow: 0 1px 3px rgba(0,0,0,.08); --scale: 0.9px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418; --panel: #1a1e24; --text: #e5e7eb; --muted: #9ca3af; --line: #2b313a;
+      --fixed: #2f3640; --fixed-text: #cbd5e1; --accent: #60a5fa; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: var(--bg); color: var(--text); }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+           background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .clock { color: var(--muted); }
+  header .spacer { flex: 1; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+           padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.active { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  main { padding: 16px 20px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+          box-shadow: var(--shadow); padding: 14px 16px; }
+  .now { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+  .now .label { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .now .title { font-size: 18px; font-weight: 600; }
+  .now .why { color: var(--muted); }
+  .now .grow { flex: 1; }
+  .tally { display: flex; gap: 18px; padding: 0 16px; border-left: 1px solid var(--line); }
+  .tally .num { font-size: 20px; font-weight: 700; color: var(--good); line-height: 1.1; }
+  .tally .num.zero { color: var(--muted); }
+  .tally .lbl { font-size: 12px; color: var(--muted); }
+  @media (max-width: 600px) { .now { flex-wrap: wrap; } .tally { border-left: 0; padding: 0; } }
+  .layout { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: start; }
+  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } }
+
+  /* week grid */
+  .weekbar { display: flex; align-items: center; gap: 8px; margin: -14px -16px 10px; padding: 12px 16px 8px;
+             flex-wrap: wrap; position: sticky; top: var(--header-h, 58px); z-index: 4;
+             background: var(--panel); border-radius: 12px 12px 0 0; border-bottom: 1px solid var(--line); }
+  .weekbar .range { font-weight: 600; min-width: 170px; text-align: center; }
+  .grid { display: grid; grid-template-columns: 48px repeat(7, 1fr); overflow-x: auto; }
+  .dayhead { text-align: center; padding: 4px 2px 8px; font-weight: 600; border-bottom: 1px solid var(--line); }
+  .dayhead .load { font-weight: 400; font-size: 12px; color: var(--muted); }
+  .dayhead.today { color: var(--accent); }
+  .axis { position: relative; }
+  .axis div { position: absolute; right: 6px; font-size: 11px; color: var(--muted); transform: translateY(-50%); }
+  .col { position: relative; border-left: 1px solid var(--line); min-width: 90px; }
+  .hourline { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--line); }
+  .focus { position: absolute; left: 0; right: 0; opacity: .13; }
+  .focuslabel { position: absolute; left: 3px; font-size: 10px; color: var(--muted); }
+  .past { position: absolute; left: 0; right: 0; top: 0; background: var(--bg); opacity: .6; z-index: 2; }
+  .nowline { position: absolute; left: 0; right: 0; border-top: 2px solid var(--bad); z-index: 3; }
+  .blk { position: absolute; left: 3px; right: 3px; border-radius: 6px; padding: 2px 5px; overflow: hidden;
+         font-size: 11.5px; line-height: 1.25; color: #fff; z-index: 1; }
+  .blk .t { font-weight: 600; }
+  .blk.session { cursor: pointer; }
+  .blk.session:hover { filter: brightness(1.1); outline: 2px solid var(--text); }
+  .blk.fixed { background: var(--fixed); color: var(--fixed-text); }
+  .blk.fixed[data-class] { cursor: pointer; }
+  .blk.fixed[data-class]:hover { outline: 2px solid var(--accent); }
+  .blk.event { background: var(--panel); color: var(--text); border: 1px solid var(--line);
+               border-left: 3px solid var(--accent); cursor: pointer; }
+  .blk.event.work { background: repeating-linear-gradient(45deg, var(--panel), var(--panel) 6px, var(--fixed) 6px, var(--fixed) 12px); }
+  .switch { display: flex; gap: 0; margin-bottom: 14px; }
+  .switch button { flex: 1; border-radius: 0; }
+  .switch button:first-child { border-radius: 8px 0 0 8px; }
+  .switch button:last-child { border-radius: 0 8px 8px 0; }
+  .kinds { display: grid; gap: 8px; }
+  .kinds button { text-align: left; padding: 10px 14px; display: flex; gap: 12px; align-items: center; }
+  .kinds .ico { font-size: 22px; }
+  .kinds .k { font-weight: 600; }
+  .kinds .d { color: var(--muted); font-size: 13px; }
+  .daypick { display: flex; gap: 4px; flex-wrap: wrap; }
+  .daypick label { border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; font-size: 12px; cursor: pointer; }
+  .daypick input { display: none; }
+  .daypick label:has(input:checked) { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .blk.exam { background: var(--bad); color: #fff; font-weight: 600; }
+  .blk.work { background: repeating-linear-gradient(45deg, var(--fixed), var(--fixed) 6px, transparent 6px, transparent 12px);
+              border: 1px solid var(--fixed); color: var(--fixed-text); }
+
+  /* month view */
+  .monthgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--line);
+               border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .mhead { background: var(--panel); text-align: center; font-weight: 600; padding: 6px; font-size: 12px; color: var(--muted); }
+  .mcell { background: var(--panel); min-height: 108px; padding: 6px; cursor: pointer; display: flex;
+           flex-direction: column; gap: 3px; }
+  .mcell:hover { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .mcell.other { opacity: .4; }
+  .mcell.mpast .mbar, .mcell.mpast .mload { opacity: .45; }
+  .mcell .mnum { font-weight: 600; }
+  .mcell.today .mnum { color: #fff; background: var(--accent); border-radius: 10px; padding: 0 7px; align-self: flex-start; }
+  .mexam { font-size: 11px; font-weight: 600; color: #fff; background: var(--bad); border-radius: 4px; padding: 1px 5px; }
+  .mdue { font-size: 11px; border-left: 3px solid; padding-left: 5px; }
+  .mbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line); margin-top: auto; }
+  .mbar div { height: 100%; }
+  .mload { font-size: 11px; color: var(--muted); }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 10px; }
+
+  /* side panels */
+  .side { display: flex; flex-direction: column; gap: 16px; }
+  .side h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; }
+  .dl { margin-bottom: 12px; }
+  .dl .row { display: flex; justify-content: space-between; gap: 8px; }
+  .dl .name { font-weight: 600; }
+  .dl .sub { font-size: 12px; color: var(--muted); }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin: 4px 0; }
+  .bar div { height: 100%; }
+  .lead.good { color: var(--good); } .lead.warn { color: var(--warn); } .lead.bad { color: var(--bad); }
+  .problem { color: var(--bad); margin-bottom: 8px; }
+  .ok { color: var(--good); }
+  .olabel { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 10px 0 4px; }
+  .olabel:first-child { margin-top: 0; }
+  .orow { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; cursor: pointer; }
+  .orow:hover .name { color: var(--accent); }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+
+  /* subjects */
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  tr.done td { color: var(--muted); text-decoration: line-through; }
+  .toolbar { display: flex; gap: 8px; align-items: center; margin: 12px 0; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--fixed); color: var(--fixed-text); }
+
+  /* modal, overlay, toast */
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; align-items: center;
+              justify-content: center; z-index: 20; }
+  .backdrop.open { display: flex; }
+  .modal { width: min(420px, 92vw); }
+  .modal h3 { margin: 0 0 4px; }
+  .modal .meta { color: var(--muted); margin-bottom: 14px; }
+  .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+  .field label { font-size: 12px; color: var(--muted); }
+  input, select { font: inherit; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px;
+                  background: var(--bg); color: var(--text); }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+  .radios { display: flex; gap: 12px; margin-bottom: 10px; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: center;
+             justify-content: center; z-index: 30; color: #fff; font-size: 16px; flex-direction: column; gap: 12px; }
+  .overlay.open { display: flex; }
+  .spinner { width: 36px; height: 36px; border: 4px solid rgba(255,255,255,.3); border-top-color: #fff;
+             border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text);
+           color: var(--bg); padding: 10px 16px; border-radius: 8px; display: none; z-index: 40;
+           align-items: center; gap: 14px; }
+  .toast button { background: transparent; color: var(--bg); border-color: var(--bg); padding: 3px 10px; }
+  .linkbtn { padding: 2px 8px; font-size: 12px; margin-left: 8px; text-decoration: none; }
+  .hidden { display: none !important; }
+  .timehint { font-size: 12px; color: var(--muted); margin: -6px 0 12px; }
+  .settings { display: grid; gap: 16px; max-width: 640px; }
+  .settings h2 { margin-top: 0; }
+
+  /* stats */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .tile .num { font-size: 26px; font-weight: 700; line-height: 1.1; }
+  .tile .lbl { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+  .tile .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .bars { position: relative; display: flex; align-items: flex-end; gap: 2px; height: 220px; margin: 22px 0 0 36px;
+          border-bottom: 1px solid var(--line); }
+  .bars .scol { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end;
+               align-items: center; position: relative; min-width: 0; }
+  .bars .scol:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  .bars .bar { width: min(70%, 36px); background: var(--accent); border-radius: 4px 4px 0 0; }
+  .bars .val { font-size: 11px; color: var(--muted); margin-bottom: 2px; white-space: nowrap; }
+  .bars .gl { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); pointer-events: none; }
+  .bars .gl span { position: absolute; left: -34px; top: -8px; font-size: 11px; color: var(--muted); width: 28px; text-align: right; }
+  .bars .mintick { position: absolute; left: 10%; right: 10%; border-top: 2px dashed var(--muted); pointer-events: none; }
+  .barlabels { display: flex; gap: 2px; margin-left: 36px; }
+  .barlabels div { flex: 1; text-align: center; font-size: 11px; color: var(--muted); padding-top: 4px; min-width: 0; overflow: hidden; }
+  .barlabels .hit { color: var(--good); font-weight: 700; }
+  .barlabels .today { color: var(--text); font-weight: 700; }
+  .avail { display: grid; grid-template-columns: 42px repeat(7, 1fr); column-gap: 3px; user-select: none; touch-action: none; }
+  .avail .h { font-size: 12px; text-align: center; font-weight: 600; padding-bottom: 2px; }
+  .avail .h .sub { display: block; font-weight: 400; color: var(--muted); }
+  .avail .t { font-size: 10px; color: var(--muted); line-height: 10px; transform: translateY(-5px); }
+  .avail .c { height: 10px; background-color: var(--bg); cursor: crosshair; position: relative; }
+  .avail .c.hr { border-top: 1px solid var(--line); }
+  .avail .c.on { background-color: var(--accent); opacity: .75; }
+  .avail .c.cls { background-image: repeating-linear-gradient(45deg, transparent 0 4px, rgba(127,127,127,.45) 4px 6px); }
+  .avail .c .lbl { position: absolute; left: 2px; top: 0; font-size: 9px; line-height: 10px; color: var(--text);
+                   white-space: nowrap; overflow: hidden; max-width: 100%; pointer-events: none; z-index: 1; }
+  .avail .f { padding-top: 6px; }
+  .avail .f input { width: 100%; padding: 4px; font-size: 12px; }
+  .avail .fl { font-size: 11px; color: var(--muted); padding-top: 10px; }
+
+  /* hosted: demo bar, first-run guide */
+  .demobar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 20px;
+             background: color-mix(in srgb, var(--warn) 14%, var(--panel)); border-bottom: 1px solid var(--line); }
+  .demobar a { color: var(--accent); }
+  .guide { margin-bottom: 16px; border-color: var(--accent); }
+  .guide h2 { margin: 0 0 8px; }
+  .guide ol { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 8px; }
+  .guide .actions { justify-content: flex-start; flex-wrap: wrap; }
+  header a.home { color: var(--muted); text-decoration: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>HeadStart</h1>
+  <a class="home hidden" id="nav-home" href="/" title="HeadStart home page">Home</a>
+  <span class="clock" id="semester"></span>
+  <span class="clock" id="clock"></span>
+  <span class="spacer"></span>
+  <button id="nav-week" class="active">Week</button>
+  <button id="nav-month">Month</button>
+  <button id="nav-subjects">Subjects</button>
+  <button id="nav-stats">Stats</button>
+  <button id="nav-settings">Settings</button>
+  <button id="btn-add" class="primary">+ Add</button>
+  <button id="btn-replan" title="Re-plan from the current time">Re-plan</button>
+  <button id="btn-guide" title="How to set up your planner">Guide</button>
+</header>
+<div class="demobar hidden" id="demo-bar">
+  <span>This is the shared demo: anyone with the link can see and change it.</span>
+  <button id="btn-reset">Reset demo</button>
+  <a href="/">Start your own planner</a>
+</div>
+
+<main>
+  <!-- WEEK VIEW -->
+  <section id="view-week">
+    <div class="card guide hidden" id="guide">
+      <h2>Getting started</h2>
+      <ol>
+        <li><b>Add every subject you have this semester</b> with <i>+ Add subject</i> on the Subjects tab, with its weekly classes.
+          Then each subject's classes, exams and tasks are handled together, and lectures to study are added after each class.</li>
+        <li><b>Set when you can study</b> in <i>Settings</i>: paint your free time on the weekly grid and set how many hours a day you want to study.</li>
+        <li><b>Add your work</b> with <i>+ Add</i>: a study task (with a due date or for an exam), a fixed-time event, or a hobby.
+          Add exams from a subject's page. HeadStart plans it all into your free time and re-plans as you log sessions.</li>
+      </ol>
+      <div class="actions">
+        <button class="primary" id="guide-subjects">Add subjects</button>
+        <button id="guide-settings">Open Settings</button>
+        <button id="guide-add">+ Add a task</button>
+        <button id="guide-close" style="margin-left:auto">Got it</button>
+      </div>
+    </div>
+    <div class="card now" id="now-card"></div>
+    <div class="layout">
+      <div class="card">
+        <div class="weekbar">
+          <button id="prev">&larr;</button>
+          <span class="range" id="range"></span>
+          <button id="next">&rarr;</button>
+          <button id="today">This week</button>
+        </div>
+        <div class="grid" id="grid"></div>
+      </div>
+      <div class="side">
+        <div class="card"><h2>Deadlines</h2><div id="deadlines"></div></div>
+        <div class="card"><h2>Other this week</h2><div id="other"></div></div>
+        <div class="card"><h2>Problems</h2><div id="problems"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MONTH VIEW -->
+  <section id="view-month" class="hidden">
+    <div class="card">
+      <div class="weekbar">
+        <button id="mprev">&larr;</button>
+        <span class="range" id="mrange"></span>
+        <button id="mnext">&rarr;</button>
+        <button id="mtoday">From this week</button>
+        <span class="sub" style="color:var(--muted);margin-left:8px">Click a day to open its week.</span>
+      </div>
+      <div class="monthgrid" id="monthgrid"></div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </section>
+
+  <!-- STATS VIEW -->
+  <section id="view-stats" class="hidden">
+    <div class="card" style="margin-bottom:16px">
+      <div class="weekbar" style="margin-bottom:-14px;border-radius:12px;border-bottom:0">
+        <button id="st-week" class="active">Week</button>
+        <button id="st-month">Month</button>
+        <button id="sprev">&larr;</button>
+        <span class="range" id="srange"></span>
+        <button id="snext">&rarr;</button>
+        <button id="snow">Now</button>
+      </div>
+    </div>
+    <div class="tiles" id="stat-tiles"></div>
+    <div class="card">
+      <h2 style="margin:0;font-size:15px">Hours studied per day</h2>
+      <div style="color:var(--muted);font-size:12px" id="stat-note"></div>
+      <div class="bars" id="stat-bars"></div>
+      <div class="barlabels" id="stat-labels"></div>
+    </div>
+  </section>
+
+  <!-- SETTINGS VIEW -->
+  <section id="view-settings" class="hidden">
+    <div class="settings">
+      <div class="card">
+        <h2>Semester</h2>
+        <div class="field"><label>Name</label><input id="st-name" placeholder="e.g. Sem 5"></div>
+        <div class="radios" style="gap:8px">
+          <div class="field" style="flex:1"><label>Starts</label><input id="st-start" type="date"></div>
+          <div class="field" style="flex:1"><label>Ends</label><input id="st-end" type="date"></div>
+        </div>
+        <div class="sub" style="color:var(--muted)">Shown at the top as the week of the semester.</div>
+      </div>
+      <div class="card">
+        <h2>When you can study</h2>
+        <div class="sub" style="color:var(--muted);margin-bottom:10px">Drag over the grid to mark the times you're
+          free to study; drag over marked time to unmark it. Meals, sleep and anything else are simply the gaps.
+          Classes (striped) are skipped automatically, so you can paint over them.</div>
+        <div class="toolbar" style="margin-top:0;flex-wrap:wrap">
+          <span class="sub">Copy</span><select id="st-copy-from"></select>
+          <span class="sub">to</span>
+          <button data-copy="weekdays">Mon-Fri</button><button data-copy="weekend">Sat-Sun</button>
+          <button data-copy="all">All days</button>
+          <button id="st-clear" style="margin-left:auto">Clear all</button>
+        </div>
+        <div class="avail" id="st-grid"></div>
+        <div class="sub" style="color:var(--muted);margin-top:8px">Max and min are study hours per day.
+          Max 0 keeps a day free of study but leaves time for hobbies; min 0 means no minimum.</div>
+      </div>
+      <div class="card">
+        <h2>Sessions</h2>
+        <div class="radios" style="gap:8px">
+          <div class="field" style="flex:1"><label>Shortest session (min)</label><input id="st-smin" type="number" step="10" min="10"></div>
+          <div class="field" style="flex:1"><label>Longest session (min)</label><input id="st-smax" type="number" step="10" min="10"></div>
+        </div>
+      </div>
+      <div class="actions" style="justify-content:flex-start">
+        <button id="st-save" class="primary">Save and re-plan</button>
+        <button id="st-reset">Discard changes</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- SUBJECTS VIEW -->
+  <section id="view-subjects" class="hidden">
+    <div class="card">
+      <div class="tabs" id="subject-tabs"></div>
+      <div id="subject-body"></div>
+    </div>
+  </section>
+</main>
+
+<!-- log a session -->
+<div class="backdrop" id="session-modal">
+  <div class="card modal">
+    <h3 id="sm-title"></h3>
+    <div class="meta" id="sm-meta"></div>
+    <div id="sm-task-fields">
+      <div class="field"><label>Time worked</label><input id="sm-spent" class="dur" placeholder="e.g. 50m or 1h 30m"></div>
+      <div class="field"><label>Time still needed after this session</label>
+        <input id="sm-left" class="dur" placeholder="e.g. 50m or 1h 30m"></div>
+    </div>
+    <div class="actions">
+      <button id="sm-edit" style="margin-right:auto">Edit task</button>
+      <button data-close>Cancel</button>
+      <button id="sm-finish">Save and finish task</button>
+      <button id="sm-save" class="primary">Save, task continues</button>
+    </div>
+  </div>
+</div>
+
+<!-- add a subject -->
+<div class="backdrop" id="subject-modal">
+  <div class="card modal">
+    <h3>Add a subject</h3>
+    <div class="meta">Add every subject you have this semester. Exams and tasks are added on its page afterwards.</div>
+    <div class="field"><label>Name</label><input id="sb-name" placeholder="e.g. DAA"></div>
+    <div class="field"><label>Type</label>
+      <select id="sb-kind"><option value="subject">Subject</option><option value="lab">Lab</option>
+        <option value="other">Other (not a course)</option></select></div>
+    <div class="field"><label>Weekly classes</label><div id="sb-classes"></div>
+      <button id="sb-add-class" style="align-self:flex-start">+ Add a class</button></div>
+    <div class="timehint">Times are 24-hour: 14:00 is 2 PM.</div>
+    <label class="sub" style="display:block;margin-bottom:8px"><input type="checkbox" id="sb-lectures" checked>
+      Add a lecture to study after each class</label>
+    <div class="actions">
+      <button data-close>Cancel</button>
+      <button id="sb-save" class="primary">Add subject</button>
+    </div>
+  </div>
+</div>
+
+<!-- add a weekly class to a subject -->
+<div class="backdrop" id="weekly-modal">
+  <div class="card modal">
+    <h3 id="wc-heading">Add a weekly class</h3>
+    <div class="meta">A class that happens every week. For a one-off makeup class use + Extra class.</div>
+    <div class="radios" style="gap:8px">
+      <div class="field" style="flex:1"><label>Day</label><select id="wc-day"></select></div>
+      <div class="field" style="flex:1"><label>Start</label><input id="wc-start" type="time"></div>
+      <div class="field" style="flex:1"><label>End</label><input id="wc-end" type="time"></div>
+    </div>
+    <div class="actions">
+      <button data-close>Cancel</button>
+      <button id="wc-save" class="primary">Add and re-plan</button>
+    </div>
+  </div>
+</div>
+
+<!-- first screen of a new planner -->
+<div class="backdrop" id="setup-modal">
+  <div class="card modal">
+    <h3>Welcome to HeadStart</h3>
+    <div class="meta">A study planner for your semester. Start with the semester's dates; everything else can be added after.</div>
+    <div class="field"><label>Semester name (optional)</label><input id="su-name" placeholder="e.g. Sem 5"></div>
+    <div class="radios" style="gap:8px">
+      <div class="field" style="flex:1"><label>Starts</label><input id="su-start" type="date"></div>
+      <div class="field" style="flex:1"><label>Ends</label><input id="su-end" type="date"></div>
+    </div>
+    <div class="actions"><button id="su-save" class="primary">Start planning</button></div>
+  </div>
+</div>
+
+<!-- add an exam -->
+<div class="backdrop" id="exam-modal">
+  <div class="card modal">
+    <h3 id="em-heading">Add an exam</h3>
+    <div class="meta" id="em-meta">Lectures after the previous exam count toward it, and a revision item is planned before it.</div>
+    <div class="field"><label>Title</label><input id="em-title" placeholder="e.g. RP Endsem"></div>
+    <div class="field"><label>Date</label><input id="em-date" type="date"></div>
+    <div class="radios" style="gap:8px">
+      <div class="field" style="flex:1"><label>Start (optional)</label><input id="em-start" type="time"></div>
+      <div class="field" style="flex:1"><label>End (optional)</label><input id="em-end" type="time"></div>
+    </div>
+    <div class="timehint">Times are 24-hour: 18:30 is 6:30 PM, 00:00 is midnight.</div>
+    <div class="field" id="em-rev-field"><label>Revision time to plan before it</label>
+      <input id="em-rev" class="dur" placeholder="e.g. 50m or 1h 30m" value="6h"></div>
+    <div class="field"><label>Syllabus ends with lectures up to (optional)</label><input id="em-syl" type="date"></div>
+    <div class="actions">
+      <button data-close>Cancel</button>
+      <button id="em-save" class="primary">Add and re-plan</button>
+    </div>
+  </div>
+</div>
+
+<!-- + Add: what kind of thing? -->
+<div class="backdrop" id="kind-modal">
+  <div class="card modal">
+    <h3>What do you want to add?</h3>
+    <div class="kinds">
+      <button data-to="study"><span class="ico">&#128218;</span><span><div class="k">Study</div>
+        <div class="d">A lecture, assignment, project or exam prep. The plan finds time for it.</div></span></button>
+      <button data-to="event"><span class="ico">&#128204;</span><span><div class="k">Fixed-time event</div>
+        <div class="d">Something at set times: a meeting, a club, a contest, gym at 7.</div></span></button>
+      <button data-to="hobby"><span class="ico">&#127928;</span><span><div class="k">Hobby / self time</div>
+        <div class="d">Guitar, workout, reading: a few times a week, fitted into your free time.</div></span></button>
+    </div>
+    <div class="actions"><button data-close>Cancel</button></div>
+  </div>
+</div>
+
+<!-- add a task -->
+<div class="backdrop" id="task-modal">
+  <div class="card modal">
+    <div class="switch"><button class="active" data-to="study">Study</button><button data-to="event">Fixed time</button><button data-to="hobby">Hobby / self time</button></div>
+    <h3>Add a task</h3>
+    <div class="meta">Something that needs study time: the plan finds slots for it.</div>
+    <div class="field"><label>Subject</label><select id="tm-area"></select></div>
+    <div id="tm-new-field" class="hidden">
+      <div class="field"><label>New subject name</label><input id="tm-new-name" placeholder="e.g. ML, ICPC, Club"></div>
+      <div class="field"><label>Type</label>
+        <select id="tm-new-kind">
+          <option value="subject">Course</option>
+          <option value="lab">Lab</option>
+          <option value="other">Other (not a course, still counts as work)</option>
+        </select></div>
+    </div>
+    <div class="field"><label>Title</label><input id="tm-title" placeholder="e.g. Assignment 7"></div>
+    <div class="field"><label>Time needed</label><input id="tm-hours" class="dur" placeholder="e.g. 50m or 1h 30m" value="2h"></div>
+    <div class="radios">
+      <label><input type="radio" name="tm-kind" value="due" checked> Due date</label>
+      <label><input type="radio" name="tm-kind" value="exam"> For an exam</label>
+      <label><input type="radio" name="tm-kind" value="none"> No deadline</label>
+    </div>
+    <div class="field" id="tm-due-field"><label>Due (end of day)</label><input id="tm-due" type="date"></div>
+    <div class="field hidden" id="tm-exam-field"><label>Counts toward</label><select id="tm-exam"></select></div>
+    <div class="actions">
+      <button data-close>Cancel</button>
+      <button id="tm-save" class="primary">Add and re-plan</button>
+    </div>
+  </div>
+</div>
+
+<!-- edit a task -->
+<div class="backdrop" id="edit-modal">
+  <div class="card modal">
+    <h3 id="ed-heading">Edit task</h3>
+    <div class="meta" id="ed-meta"></div>
+    <div class="field" id="ed-title-field"><label>Title</label><input id="ed-title"></div>
+    <div class="field" id="ed-hours-field"><label>Time still needed</label>
+      <input id="ed-hours" class="dur" placeholder="e.g. 50m or 1h 30m"></div>
+    <div class="radios" id="ed-kinds">
+      <label><input type="radio" name="ed-kind" value="due"> Due date</label>
+      <label><input type="radio" name="ed-kind" value="exam"> For an exam</label>
+      <label><input type="radio" name="ed-kind" value="none"> No deadline</label>
+    </div>
+    <div class="field" id="ed-due-field"><label>Due (end of day)</label><input id="ed-due" type="date"></div>
+    <div class="field hidden" id="ed-exam-field"><label>Counts toward</label><select id="ed-exam"></select></div>
+    <div class="actions">
+      <button id="ed-delete" style="margin-right:auto;color:var(--bad)">Delete task</button>
+      <button data-close>Cancel</button>
+      <button id="ed-save" class="primary">Save and re-plan</button>
+    </div>
+  </div>
+</div>
+
+<!-- edit a weekly activity -->
+<div class="backdrop" id="act-modal">
+  <div class="card modal">
+    <div class="switch" id="am-switch"><button data-to="study">Study</button><button data-to="event">Fixed time</button><button class="active" data-to="hobby">Hobby / self time</button></div>
+    <h3 id="am-heading">Edit activity</h3>
+    <div class="meta" id="am-meta"></div>
+    <div class="field"><label>Title</label><input id="am-title"></div>
+    <div id="am-flex">
+      <div class="radios">
+        <label><input type="radio" name="am-kind" value="sessions"> Sessions a week</label>
+        <label><input type="radio" name="am-kind" value="weekly"> Hours a week</label>
+      </div>
+      <div class="radios" id="am-sessions" style="gap:8px">
+        <div class="field" style="flex:1"><label>Sessions per week</label><input id="am-spw" type="number" step="1" min="1"></div>
+        <div class="field" style="flex:1"><label>Time per session</label><input id="am-shr" class="dur" placeholder="e.g. 50m or 1h 30m"></div>
+      </div>
+      <div class="field hidden" id="am-weekly"><label>Time per week (split as the plan sees fit)</label>
+        <input id="am-whr" class="dur" placeholder="e.g. 50m or 1h 30m"></div>
+    </div>
+    <div class="actions">
+      <button id="am-delete" style="margin-right:auto;color:var(--bad)">Delete activity</button>
+      <button data-close>Cancel</button>
+      <button id="am-save" class="primary">Save and re-plan</button>
+    </div>
+  </div>
+</div>
+
+<!-- add or edit a fixed-time event -->
+<div class="backdrop" id="event-modal">
+  <div class="card modal">
+    <div class="switch" id="ev-switch"><button data-to="study">Study</button><button class="active" data-to="event">Fixed time</button><button data-to="hobby">Hobby / self time</button></div>
+    <h3 id="ev-heading">Add an event</h3>
+    <div class="meta">A meeting, a workout, a club, a shift: nothing is planned for it, it just blocks its time.</div>
+    <div class="field"><label>Title</label><input id="ev-title" placeholder="e.g. Team meeting, Gym"></div>
+    <div class="radios">
+      <label><input type="radio" name="ev-rep" value="once" checked> Once</label>
+      <label><input type="radio" name="ev-rep" value="weekly"> Every week</label>
+    </div>
+    <div class="field" id="ev-date-field"><label>Date</label><input id="ev-date" type="date"></div>
+    <div class="field hidden" id="ev-days-field"><label>On</label><div class="daypick" id="ev-days"></div></div>
+    <div class="radios" style="gap:8px">
+      <div class="field" style="flex:1"><label>Start</label><input id="ev-start" type="time"></div>
+      <div class="field" style="flex:1"><label>End</label><input id="ev-end" type="time"></div>
+    </div>
+    <div class="timehint">Times are 24-hour: 18:30 is 6:30 PM, 00:00 is midnight.</div>
+    <label style="display:block;margin-bottom:10px"><input type="checkbox" id="ev-work"> Counts as study time
+      <span class="sub" style="color:var(--muted)">(e.g. ICPC practice: uses up that day's max study hours)</span></label>
+    <div class="actions">
+      <span id="ev-delete-group" style="margin-right:auto;display:flex;gap:6px">
+        <button id="ev-skip" style="color:var(--bad)">Skip this day</button>
+        <button id="ev-delete" style="color:var(--bad)">Delete</button>
+      </span>
+      <button data-close>Cancel</button>
+      <button id="ev-save" class="primary">Add and re-plan</button>
+    </div>
+  </div>
+</div>
+
+<!-- a class: cancel or move it, or add an extra one -->
+<div class="backdrop" id="class-modal">
+  <div class="card modal">
+    <h3 id="cl-heading"></h3>
+    <div class="meta" id="cl-meta"></div>
+    <div id="cl-cancel-row" class="actions" style="justify-content:flex-start;margin:0 0 12px">
+      <button id="cl-cancel" style="color:var(--bad)">Cancel this class</button>
+      <span class="sub" style="color:var(--muted)">Frees the time; its lecture goes too.</span>
+    </div>
+    <div class="olabel" id="cl-to-label">Or move it to</div>
+    <div class="field"><label>Date</label><input id="cl-date" type="date"></div>
+    <div class="radios" style="gap:8px">
+      <div class="field" style="flex:1"><label>Start</label><input id="cl-start" type="time"></div>
+      <div class="field" style="flex:1"><label>End</label><input id="cl-end" type="time"></div>
+    </div>
+    <div class="timehint">Times are 24-hour: 18:30 is 6:30 PM, 00:00 is midnight.</div>
+    <div class="actions">
+      <button data-close>Close</button>
+      <button id="cl-save" class="primary">Move and re-plan</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay"><div class="spinner"></div><div id="overlay-text">Planning...</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let PLAN = null, SUBJECTS = null, weekStart = null, monthStart = null, currentSubject = null, modalSession = null;
+
+// ------------------------------------------------------------------ helpers
+const pad = (n) => String(n).padStart(2, "0");
+const toMin = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
+const minOfDay = (d) => d.getHours() * 60 + d.getMinutes();
+const endMin = (s, e) => minOfDay(s) + (e - s) / 60000;  // e may be midnight, the next day
+const hm = (min) => `${Math.floor(min / 60)}h${pad(min % 60)}`;
+// Durations are typed as "50m", "1h 30m", "1h30", "1:30" or plain hours ("1.5"). Returns
+// hours, or NaN when the text can't be read.
+const parseDur = (text) => {
+  const s = String(text).trim().toLowerCase().replace(/\s+/g, "");
+  let m = s.match(/^(\d+):([0-5]?\d)$/);
+  if (m) return +m[1] + m[2] / 60;
+  if (/^(\d+\.?\d*|\.\d+)$/.test(s)) return +s;
+  m = s.match(/^(?:(\d+\.?\d*|\.\d+)h(?:rs?|ours?)?)?(?:(\d+)(?:m(?:ins?|inutes?)?)?)?$/);
+  if (m && (m[1] || m[2])) return +(m[1] || 0) + +(m[2] || 0) / 60;
+  return NaN;
+};
+const fmtDur = (hr) => {
+  const min = Math.round(hr * 60), h = Math.floor(min / 60), m = min % 60;
+  return h && m ? `${h}h ${m}m` : h ? `${h}h` : `${m}m`;
+};
+const DUR_HELP = "Write time like 50m, 1h 30m or 1.5 (hours).";
+const hhmm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const isoDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const dayLabel = (d) => `${DAYS[d.getDay()]} ${d.getDate()}`;
+const niceDate = (d) => `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+const monday = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+const color = (area) => (PLAN.areas.find((a) => a.name === area) || {}).color || "#888";
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function toast(msg, undoEntries) {
+  const t = $("toast");
+  t.innerHTML = `<span>${esc(msg)}</span>` + (undoEntries ? `<button id="undo-btn">Undo</button>` : "");
+  t.style.display = "flex";
+  if (undoEntries) $("undo-btn").onclick = () => {
+    t.style.display = "none";
+    refresh("/api/undo", { entries: undoEntries }, "Undoing...");
+  };
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => (t.style.display = "none"), undoEntries ? 15000 : 4000);
+}
+
+function describe(e) {
+  const title = (PLAN.items[e.id] || {}).title || e.id;
+  if (e.status === "done") return `${title}: marked done`;
+  if (e.status === "reopen") return `${title}: reopened, ${e.left_hr} h left`;
+  if (e.status === "adjust") return `${title}: now ${e.left_hr} h left`;
+  if (e.left_hr === 0) return `${title}: session ${e.session || ""} saved, task finished`;
+  return `${title}: session ${e.session || ""} saved`;
+}
+
+async function api(path, body, message) {
+  $("overlay-text").textContent = message || "Re-planning... (10-30 s)";
+  $("overlay").classList.add("open");
+  try {
+    // Relative to the page, so a hosted planner at /p/<id>/ talks to its own data.
+    const res = await fetch(path.replace(/^\//, ""), body ? { method: "POST", headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify(body) } : {});
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    return data;
+  } finally {
+    $("overlay").classList.remove("open");
+  }
+}
+
+async function refresh(path, body, message) {
+  try {
+    PLAN = await api(path, body, message);
+    SUBJECTS = null;
+    render();
+    if (PLAN.logged) toast(PLAN.logged.length > 1 ? `${PLAN.logged.length} tasks marked done` : describe(PLAN.logged[0]), PLAN.logged);
+    else if (path === "/api/undo") toast("Undone.");
+  } catch (e) { toast(e.message); }
+}
+
+// ------------------------------------------------------------------ now card
+// What got done today, so progress is visible: hours studied and tasks finished.
+function tally() {
+  const t = PLAN.today;
+  if (!t) return "";  // an older server that doesn't send it
+  const h = Math.round(t.study_min / 60 * 10) / 10;
+  const stat = (num, zero, lbl, title) =>
+    `<div title="${title}"><div class="num${zero ? " zero" : ""}">${num}</div><div class="lbl">${lbl}</div></div>`;
+  return `<div class="tally"><div class="label" style="align-self:center">Today</div>
+    ${stat(`${h} h`, !h, "studied", `${t.sessions} session${t.sessions === 1 ? "" : "s"} logged`)}
+    ${stat(t.tasks_done, !t.tasks_done, t.tasks_done === 1 ? "task done" : "tasks done", "Tasks finished today")}</div>`;
+}
+function renderNow() {
+  const n = PLAN.next, card = $("now-card");
+  if (!n) { card.innerHTML = `<div class="grow"><div class="title">Nothing planned. You're all caught up.</div></div>${tally()}`; return; }
+  const s = new Date(n.start), e = new Date(n.end), now = new Date(PLAN.now);
+  const when = s <= now ? "Now" : `Next, ${niceDate(s)}`;
+  card.innerHTML = `
+    <span class="dot" style="background:${n.kind === "fixed" ? "var(--fixed)" : color(sessionArea(n))};width:14px;height:14px"></span>
+    <div class="grow">
+      <div class="label">${when} &middot; ${hhmm(s)}-${hhmm(e)}</div>
+      <div class="title">${esc(n.title)}</div>
+      <div class="why">Why: ${esc(n.reason)}</div>
+    </div>
+    ${n.kind === "fixed" ? "" : `<button class="primary" id="now-done">Done</button>`}
+    ${tally()}`;
+  if (n.kind === "fixed") return;
+  $("now-done").onclick = () => openSession(PLAN.sessions.find((x) => x.id === n.id && x.start === n.start));
+}
+const sessionArea = (n) => (PLAN.sessions.find((x) => x.id === n.id) || {}).area;
+
+// ------------------------------------------------------------------ week grid
+function renderWeek() {
+  const grid = $("grid"), start = toMin(PLAN.day_start), end = toMin(PLAN.day_end);
+  const height = (end - start) * 0.9, now = new Date(PLAN.now);
+  const days = [...Array(7)].map((_, i) => { const d = new Date(weekStart); d.setDate(d.getDate() + i); return d; });
+  const last = days[6];
+  $("range").textContent = `${days[0].getDate()} ${MONTHS[days[0].getMonth()]} - ${last.getDate()} ${MONTHS[last.getMonth()]}`;
+  const y = (min) => (min - start) * 0.9;
+
+  let html = `<div></div>`;
+  for (const d of days) {
+    const info = PLAN.days.find((x) => x.date === isoDate(d));
+    const load = info ? `<div class="load">${hm(info.work_min)} / ${hm(info.max_work_min)}</div>` : `<div class="load">&nbsp;</div>`;
+    html += `<div class="dayhead ${isoDate(d) === isoDate(now) ? "today" : ""}">${dayLabel(d)}${load}</div>`;
+  }
+  html += `<div class="axis" style="height:${height}px">`;
+  for (let h = Math.ceil(start / 60); h * 60 <= end; h++) html += `<div style="top:${y(h * 60)}px">${pad(h)}:00</div>`;
+  html += `</div>`;
+
+  for (const d of days) {
+    const key = isoDate(d);
+    html += `<div class="col" style="height:${height}px">`;
+    for (let h = Math.ceil(start / 60); h * 60 <= end; h++) html += `<div class="hourline" style="top:${y(h * 60)}px"></div>`;
+    // exam focus windows (shaded, in the subject's colour)
+    for (const f of PLAN.focus) {
+      const fs = new Date(f.start), fe = new Date(f.end);
+      const dayS = new Date(`${key}T00:00`), dayE = new Date(dayS); dayE.setDate(dayE.getDate() + 1);
+      if (fe <= dayS || fs >= dayE) continue;
+      const a = Math.max(start, fs < dayS ? start : minOfDay(fs)), b = Math.min(end, fe >= dayE ? end : minOfDay(fe));
+      if (b <= a) continue;
+      html += `<div class="focus" style="top:${y(a)}px;height:${(b - a) * 0.9}px;background:${color(f.area)}"></div>
+               <div class="focuslabel" style="top:${y(a) + 1}px">${esc(f.area)} focus</div>`;
+    }
+    for (const b of PLAN.blocks.filter((b) => b.start.startsWith(key))) {
+      const s = new Date(b.start), e = new Date(b.end);
+      const cls = b.kind === "exam" ? "exam" : b.kind === "commitment" ? `event${b.work ? " work" : ""}` : b.work ? "work" : "fixed";
+      const attrs = b.ref !== null ? `data-ref="${b.ref}" data-date="${key}"`
+        : b.kind === "class" ? `data-class="${esc(b.title)}" data-date="${key}" data-start="${hhmm(s)}" data-end="${hhmm(e)}"` : "";
+      html += `<div class="blk ${cls}" ${attrs} style="top:${y(minOfDay(s))}px;height:${(endMin(s, e) - minOfDay(s)) * 0.9 - 2}px"
+                 title="${esc(b.title)} ${hhmm(s)}-${hhmm(e)}"><div class="t">${esc(b.title)}${b.kind === "class" ? " class" : ""}</div>${hhmm(s)}-${hhmm(e)}</div>`;
+    }
+    PLAN.sessions.forEach((s, i) => {
+      if (!s.start.startsWith(key)) return;
+      const a = new Date(s.start), e = new Date(s.end);
+      html += `<div class="blk session" data-i="${i}" style="top:${y(minOfDay(a))}px;height:${(endMin(a, e) - minOfDay(a)) * 0.9 - 2}px;background:${color(s.area)}"
+                 title="${esc(s.title)} ${hhmm(a)}-${hhmm(e)}"><div class="t">${esc(s.title)}</div>${hhmm(a)}-${hhmm(e)}</div>`;
+    });
+    if (key === isoDate(now)) {
+      const m = Math.min(Math.max(minOfDay(now), start), end);
+      html += `<div class="past" style="height:${y(m)}px"></div><div class="nowline" style="top:${y(m)}px"></div>`;
+    } else if (d < now) {
+      html += `<div class="past" style="height:${height}px"></div>`;
+    }
+    html += `</div>`;
+  }
+  grid.innerHTML = html;
+  grid.querySelectorAll(".blk.session").forEach((el) => (el.onclick = () => openSession(PLAN.sessions[+el.dataset.i])));
+  grid.querySelectorAll(".blk.event").forEach((el) => (el.onclick = () => openEvent(+el.dataset.ref, el.dataset.date)));
+  grid.querySelectorAll(".blk[data-class]").forEach((el) => (el.onclick = () =>
+    openClass(el.dataset.class, el.dataset.date, el.dataset.start, el.dataset.end)));
+  renderOther();
+}
+
+// ------------------------------------------------------------------ month view
+function renderMonth() {
+  // A rolling 5 weeks from monthStart (a Monday), so upcoming work is always in view.
+  const now = new Date(PLAN.now), first = new Date(monthStart), last = new Date(first);
+  last.setDate(last.getDate() + 34);
+  $("mrange").textContent = `${first.getDate()} ${MONTHS[first.getMonth()]} - ${last.getDate()} ${MONTHS[last.getMonth()]}`;
+  let html = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => `<div class="mhead">${d}</div>`).join("");
+  for (let i = 0; i < 35; i++) {
+    const d = new Date(first); d.setDate(d.getDate() + i);
+    const key = isoDate(d), info = PLAN.days.find((x) => x.date === key);
+    const cls = [key === isoDate(now) ? "today" : "", key < isoDate(now) ? "mpast other" : ""].join(" ");
+    const label = d.getDate() === 1 || i === 0 ? `${d.getDate()} ${MONTHS[d.getMonth()]}` : d.getDate();
+    let body = `<span class="mnum">${label}</span>`;
+    for (const b of PLAN.blocks.filter((b) => b.kind === "exam" && b.start.startsWith(key)))
+      body += `<span class="mexam" title="${esc(b.title)}">${esc(b.title)} ${hhmm(new Date(b.start))}</span>`;
+    for (const dl of PLAN.deadlines.filter((x) => x.kind === "due" && x.date.startsWith(key)))
+      body += `<span class="mdue" style="border-color:${color(dl.area)}">${esc(dl.title)} due</span>`;
+    if (info) {
+      // study minutes per subject that day, plus fixed study time (e.g. ICPC) in grey
+      const per = {};
+      for (const s of PLAN.sessions) if (s.work && s.start.startsWith(key))
+        per[s.area] = (per[s.area] || 0) + (new Date(s.end) - new Date(s.start)) / 60000;
+      const fixed = PLAN.blocks.filter((b) => b.work && b.start.startsWith(key))
+        .reduce((t, b) => t + (new Date(b.end) - new Date(b.start)) / 60000, 0);
+      const cap = Math.max(info.max_work_min, info.work_min, 1);
+      body += `<div class="mbar" title="${hm(info.work_min)} of ${hm(info.max_work_min)}">` +
+        Object.entries(per).map(([a, m]) => `<div style="width:${100 * m / cap}%;background:${color(a)}"></div>`).join("") +
+        (fixed ? `<div style="width:${100 * fixed / cap}%;background:var(--muted)"></div>` : "") + `</div>`;
+      body += `<span class="mload">${hm(info.work_min)} / ${hm(info.max_work_min)}</span>`;
+    }
+    html += `<div class="mcell ${cls}" data-date="${key}">${body}</div>`;
+  }
+  $("monthgrid").innerHTML = html;
+  $("monthgrid").querySelectorAll(".mcell").forEach((c) => (c.onclick = () => {
+    weekStart = monday(new Date(`${c.dataset.date}T00:00`));
+    showView("week");
+  }));
+  $("legend").innerHTML = PLAN.areas.filter((a) => a.kind !== "hobby")
+    .map((a) => `<span><span class="dot" style="background:${a.color}"></span>${esc(a.name)}</span>`).join("") +
+    `<span><span class="dot" style="background:var(--muted)"></span>Fixed study (ICPC)</span>` +
+    `<span><span class="dot" style="background:var(--bad)"></span>Exam</span>`;
+}
+
+// ------------------------------------------------------------------ side panels
+function renderSide() {
+  $("deadlines").innerHTML = PLAN.deadlines.map((d) => {
+    const lead = d.lead_hr, cls = lead === null ? "bad" : lead >= 24 ? "good" : lead >= 6 ? "warn" : "bad";
+    const leadText = lead === null ? "not planned" : lead >= 48 ? `${Math.round(lead / 24)} days ahead` : `${lead} h ahead`;
+    const pct = d.items > 1 ? (100 * d.items_done / d.items) : (d.needed_min ? 0 : 100);
+    return `<div class="dl">
+      <div class="row"><span class="name">${esc(d.title)}</span><span class="sub">${niceDate(new Date(d.date))}</span></div>
+      <div class="bar"><div style="width:${pct}%;background:${color(d.area)}"></div></div>
+      <div class="row sub"><span>${d.items > 1 ? `${d.items_done}/${d.items} done, ` : ""}${hm(d.needed_min)} left</span>
+        <span class="lead ${cls}">${leadText}</span></div></div>`;
+  }).join("") || `<div class="sub">No upcoming deadlines.</div>`;
+
+  $("problems").innerHTML = PLAN.problems.length
+    ? PLAN.problems.map((p) => `<div class="problem">${esc(p)}</div>`).join("")
+    : `<div class="ok">Everything fits.</div>`;
+}
+
+// A weekly target's progress bar: done (green) and planned (grey) out of the target.
+function weeklyBar(w) {
+  const got = w.done_min + w.planned_min, pct = w.target_min ? Math.min(100, 100 * got / w.target_min) : 100;
+  const donePct = w.target_min ? Math.min(100, 100 * w.done_min / w.target_min) : 0;
+  return `<div class="bar" style="position:relative"><div style="width:${pct}%;background:var(--muted);opacity:.4;position:absolute"></div>
+    <div style="width:${donePct}%;background:var(--good);position:absolute"></div></div>`;
+}
+
+// Everything that isn't a subject, for the week shown in the grid: tasks in non-subject
+// areas, fixed-time events, and hobby targets.
+function renderOther() {
+  const wk = isoDate(weekStart), end = new Date(weekStart); end.setDate(end.getDate() + 7);
+  const inWeek = (iso) => iso >= wk && iso < isoDate(end);
+  const kind = (area) => (PLAN.areas.find((a) => a.name === area) || {}).kind;
+  let html = "";
+
+  const tasks = Object.entries(PLAN.items).filter(([, i]) => !i.done && kind(i.area) === "other");
+  if (tasks.length) {
+    html += `<div class="olabel">Tasks</div>` + tasks.map(([id, i]) => {
+      const planned = PLAN.sessions.filter((s) => s.id === id && inWeek(s.start.slice(0, 10)))
+        .reduce((t, s) => t + (new Date(s.end) - new Date(s.start)) / 60000, 0);
+      return `<div class="orow" data-task="${esc(id)}"><span class="name"><span class="dot" style="background:${color(i.area)}"></span>${esc(i.title)}</span>
+        <span class="sub">${hm(i.left_min)} left${i.finish_by ? ` · due ${niceDate(new Date(i.finish_by))}` : ""}${planned ? ` · ${hm(planned)} this week` : ""}</span></div>`;
+    }).join("");
+  }
+
+  const evs = {};
+  for (const b of PLAN.blocks) {
+    if (b.kind !== "commitment" || !inWeek(b.start.slice(0, 10))) continue;
+    (evs[b.ref] = evs[b.ref] || []).push(b);
+  }
+  if (Object.keys(evs).length) {
+    html += `<div class="olabel">Events</div>` + Object.entries(evs).map(([ref, bs]) => {
+      const s = new Date(bs[0].start), e = new Date(bs[0].end);
+      const when = bs.map((b) => DAYS[new Date(b.start).getDay()]).join(", ");
+      return `<div class="orow" data-ref="${ref}" data-date="${bs[0].start.slice(0, 10)}"><span class="name">${esc(bs[0].title)}${bs[0].work ? ` <span class="sub">(study)</span>` : ""}</span>
+        <span class="sub">${bs.length > 1 ? when : niceDate(s)} ${hhmm(s)}-${hhmm(e)}</span></div>`;
+    }).join("");
+  }
+
+  const hobbies = PLAN.weekly.filter((w) => w.week === wk && kind((PLAN.activities[w.id] || {}).area) === "hobby");
+  if (hobbies.length) {
+    html += `<div class="olabel">Hobbies</div>` + hobbies.map((w) => `<div class="dl">
+      <div class="row"><span class="name">${esc(w.activity)}<button class="linkbtn" data-act="${esc(w.id)}">Edit</button></span>
+      <span class="sub">${hm(w.done_min)} done + ${hm(w.planned_min)} planned / ${hm(w.target_min)}</span></div>${weeklyBar(w)}</div>`).join("");
+  }
+
+  $("other").innerHTML = html || `<div class="sub">Nothing else this week.</div>`;
+  $("other").querySelectorAll("[data-task]").forEach((r) => (r.onclick = () => openEdit(r.dataset.task)));
+  $("other").querySelectorAll("[data-ref]").forEach((r) => (r.onclick = () => openEvent(+r.dataset.ref, r.dataset.date)));
+  $("other").querySelectorAll("[data-act]").forEach((b) => (b.onclick = () => openActivity(b.dataset.act)));
+}
+
+// ------------------------------------------------------------------ log a session
+function openSession(s) {
+  if (!s) return;
+  modalSession = s;
+  const a = new Date(s.start), e = new Date(s.end), planned = (e - a) / 3600000;
+  $("sm-title").textContent = s.title;
+  $("sm-meta").textContent = `${niceDate(a)}, ${hhmm(a)}-${hhmm(e)} (${hm(Math.round(planned * 60))} planned)`;
+  const item = PLAN.items[s.id];
+  $("sm-task-fields").classList.toggle("hidden", s.kind !== "item");
+  $("sm-finish").classList.toggle("hidden", s.kind !== "item");
+  $("sm-save").textContent = s.kind === "item" ? "Save, task continues" : "Mark done";
+  $("sm-edit").classList.toggle("hidden", !(s.kind === "activity" || (item && item.editable)));
+  $("sm-edit").textContent = s.kind === "activity" ? "Edit activity" : "Edit task";
+  if (item) {
+    $("sm-spent").value = fmtDur(planned);
+    $("sm-left").value = fmtDur(Math.max(0, Math.round(item.left_min - planned * 60) / 60));
+  }
+  $("session-modal").classList.add("open");
+}
+
+$("sm-save").onclick = () => {
+  const s = modalSession, body = { id: s.id };
+  if (s.kind === "item") {
+    body.spent_hr = parseDur($("sm-spent").value); body.left_hr = parseDur($("sm-left").value);
+    if (!(body.spent_hr >= 0 && body.left_hr >= 0)) return toast(DUR_HELP);
+  }
+  closeModals();
+  refresh("/api/session", body);
+};
+$("sm-finish").onclick = () => {
+  const spent_hr = parseDur($("sm-spent").value);
+  if (!(spent_hr >= 0)) return toast(DUR_HELP);
+  closeModals();
+  refresh("/api/session", { id: modalSession.id, spent_hr, left_hr: 0 });
+};
+
+$("sm-edit").onclick = () => {
+  closeModals();
+  modalSession.kind === "activity" ? openActivity(modalSession.id) : openEdit(modalSession.id);
+};
+
+// ------------------------------------------------------------------ edit a weekly activity
+let editAct = null;
+function openAddHobby() {
+  editAct = null;
+  $("am-switch").classList.remove("hidden");
+  $("am-heading").textContent = "Add a hobby";
+  $("am-meta").textContent = "How often you want to do it. The plan fits the sessions into your free time; each one you log counts as a task done today.";
+  $("am-title").value = "";
+  $("am-title").placeholder = "e.g. Guitar, Workout, Reading";
+  $("am-flex").classList.remove("hidden");
+  document.querySelector('input[name="am-kind"][value="sessions"]').checked = true;
+  $("am-spw").value = 3; $("am-shr").value = "1h"; $("am-whr").value = "3h";
+  $("am-delete").classList.add("hidden");
+  $("am-save").textContent = "Add and re-plan";
+  showActKind();
+  $("act-modal").classList.add("open");
+  $("am-title").focus();
+}
+function openActivity(id) {
+  const a = PLAN.activities[id];
+  if (!a) return toast("Activity not found.");
+  editAct = { id, ...a };
+  $("am-switch").classList.add("hidden");
+  $("am-delete").classList.remove("hidden");
+  $("am-save").textContent = "Save and re-plan";
+  $("am-title").placeholder = "";
+  $("am-heading").textContent = `Edit ${a.title}`;
+  $("am-meta").textContent = a.fixed ? "It has fixed times; change those in data/sem5.json." : "";
+  $("am-title").value = a.title;
+  $("am-flex").classList.toggle("hidden", a.fixed);
+  const kind = a.weekly_hr ? "weekly" : "sessions";
+  document.querySelector(`input[name="am-kind"][value="${kind}"]`).checked = true;
+  $("am-spw").value = a.sessions_per_week || 3;
+  $("am-shr").value = fmtDur(a.session_hr || 0.5);
+  $("am-whr").value = fmtDur(a.weekly_hr || 3);
+  showActKind();
+  $("act-modal").classList.add("open");
+}
+function showActKind() {
+  const kind = document.querySelector('input[name="am-kind"]:checked').value;
+  $("am-sessions").classList.toggle("hidden", kind !== "sessions");
+  $("am-weekly").classList.toggle("hidden", kind !== "weekly");
+}
+document.querySelectorAll('input[name="am-kind"]').forEach((r) => (r.onchange = showActKind));
+$("am-save").onclick = async () => {
+  const body = { id: editAct ? editAct.id : undefined, title: $("am-title").value.trim() };
+  if (!body.title) return toast(editAct ? "Give the activity a title." : "Give the hobby a name.");
+  if (!editAct || !editAct.fixed) {
+    if (document.querySelector('input[name="am-kind"]:checked').value === "weekly") {
+      body.weekly_hr = parseDur($("am-whr").value);
+      if (!(body.weekly_hr > 0)) return toast(`Time per week must be more than 0. ${DUR_HELP}`);
+    } else {
+      body.sessions_per_week = +$("am-spw").value; body.session_hr = parseDur($("am-shr").value);
+      if (!(body.sessions_per_week >= 1 && body.session_hr > 0)) return toast(`Give at least 1 session of more than 0 minutes. ${DUR_HELP}`);
+    }
+  }
+  closeModals();
+  const before = PLAN;
+  await refresh(editAct ? "/api/activity" : "/api/hobbies", body);
+  if (PLAN !== before) toast(editAct ? `${body.title} updated.` : `${body.title} added to your week.`);
+};
+$("am-delete").onclick = async () => {
+  const a = editAct;
+  if (!confirm(`Delete "${a.title}"? All its sessions, in every week, are removed from the plan.\nThis can't be undone.`)) return;
+  closeModals();
+  const before = PLAN;
+  await refresh("/api/delete", { id: a.id });
+  if (PLAN !== before) toast(`${a.title} deleted.`);
+};
+
+// ------------------------------------------------------------------ edit a task
+let editItem = null;
+async function openEdit(id) {
+  if (!SUBJECTS) SUBJECTS = await api("/api/subjects", null, "Loading...");
+  const subj = SUBJECTS.find((x) => x.items.some((i) => i.id === id));
+  if (!subj) return toast("Task not found.");
+  const it = editItem = subj.items.find((i) => i.id === id);
+  $("ed-heading").textContent = `Edit ${it.title}`;
+  $("ed-meta").textContent = it.lecture ? "A lecture keeps its name; change its hours or which exam it is for."
+    : it.revision ? `Revision for ${it.toward}; change how much time it needs.` : "";
+  $("ed-title-field").classList.toggle("hidden", it.lecture || it.revision);
+  for (const id of ["ed-kinds", "ed-delete"]) $(id).classList.toggle("hidden", it.revision);
+  $("ed-title").value = it.raw_title;
+  $("ed-hours-field").classList.toggle("hidden", it.done);
+  $("ed-hours").value = fmtDur(it.left_min / 60);
+  // Past exams stay in the list only if the task already points at one.
+  const exams = subj.milestones.filter((m) => new Date(m.at) > new Date(PLAN.now) || m.id === it.toward_id);
+  $("ed-exam").innerHTML = exams.map((m) => `<option value="${esc(m.id)}">${esc(m.title)} (${niceDate(new Date(m.at))})</option>`).join("")
+    || `<option value="">No upcoming exams</option>`;
+  const kind = it.toward_id ? "exam" : it.due ? "due" : "none";
+  document.querySelector(`input[name="ed-kind"][value="${kind}"]`).checked = true;
+  $("ed-due").value = it.due || "";
+  if (it.toward_id) $("ed-exam").value = it.toward_id;
+  showEditKind();
+  if (it.revision) for (const id of ["ed-due-field", "ed-exam-field"]) $(id).classList.add("hidden");
+  $("edit-modal").classList.add("open");
+}
+function showEditKind() {
+  const kind = document.querySelector('input[name="ed-kind"]:checked').value;
+  $("ed-due-field").classList.toggle("hidden", kind !== "due");
+  $("ed-exam-field").classList.toggle("hidden", kind !== "exam");
+}
+document.querySelectorAll('input[name="ed-kind"]').forEach((r) => (r.onchange = showEditKind));
+$("ed-delete").onclick = async () => {
+  const it = editItem;
+  const what = it.lecture ? "It won't come back, even though the class happened." : "It is removed from your setup.";
+  if (!confirm(`Delete "${it.title}"? ${what}
+This is not the same as marking it done, and it can't be undone.`)) return;
+  closeModals();
+  const before = PLAN;
+  await refresh("/api/delete", { id: it.id });
+  if (PLAN !== before) toast(`${it.title} deleted.`);
+};
+$("ed-save").onclick = async () => {
+  const it = editItem, deadline = document.querySelector('input[name="ed-kind"]:checked').value;
+  const body = { id: it.id, deadline };
+  if (!it.lecture && !it.revision) {
+    body.title = $("ed-title").value.trim();
+    if (!body.title) return toast("Give the task a title.");
+  }
+  if (!it.done) {
+    body.left_hr = parseDur($("ed-hours").value);
+    if (!(body.left_hr > 0)) return toast(`Time needed must be more than 0 (mark it done instead). ${DUR_HELP}`);
+  }
+  if (deadline === "due") { if (!$("ed-due").value) return toast("Pick a due date."); body.due = $("ed-due").value; }
+  if (deadline === "exam") { if (!$("ed-exam").value) return toast("That subject has no upcoming exam."); body.counts_toward = $("ed-exam").value; }
+  closeModals();
+  const before = PLAN;
+  await refresh("/api/edit", body);
+  if (PLAN !== before) toast(`${it.title} updated.`);
+};
+
+// ------------------------------------------------------------------ fixed-time events
+let eventRef = null, eventDate = null;
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+$("ev-days").innerHTML = DAY_KEYS.map((d) =>
+  `<label><input type="checkbox" value="${d}">${d[0].toUpperCase() + d.slice(1)}</label>`).join("");
+function showEventRepeat() {
+  const weekly = document.querySelector('input[name="ev-rep"]:checked').value === "weekly";
+  $("ev-date-field").classList.toggle("hidden", weekly);
+  $("ev-days-field").classList.toggle("hidden", !weekly);
+}
+document.querySelectorAll('input[name="ev-rep"]').forEach((r) => (r.onchange = showEventRepeat));
+// ref null = a new event; else edit event `ref`, opened from its block on `date`.
+function openEvent(ref = null, date = null) {
+  const ev = ref === null ? null : PLAN.events[ref];
+  eventRef = ref; eventDate = date;
+  $("ev-switch").classList.toggle("hidden", !!ev);
+  $("ev-heading").textContent = ev ? `Edit ${ev.title}` : "Add an event";
+  $("ev-save").textContent = ev ? "Save and re-plan" : "Add and re-plan";
+  $("ev-delete-group").classList.toggle("hidden", !ev);
+  $("ev-skip").classList.toggle("hidden", !ev || !!ev.date);
+  $("ev-title").value = ev ? ev.title : "";
+  document.querySelector(`input[name="ev-rep"][value="${ev && !ev.date ? "weekly" : "once"}"]`).checked = true;
+  $("ev-date").value = ev ? ev.date || "" : isoDate(new Date(PLAN.now));
+  $("ev-days").querySelectorAll("input").forEach((c) => (c.checked = !!ev && !ev.date && ev.days.includes(c.value)));
+  $("ev-start").value = ev ? ev.start : "";
+  $("ev-end").value = ev ? (ev.end === "24:00" ? "23:59" : ev.end) : "";
+  $("ev-work").checked = !!(ev && ev.work);
+  showEventRepeat();
+  $("event-modal").classList.add("open");
+  $("ev-title").focus();
+}
+// + Add asks what kind of thing first; each add form can switch to the others.
+const ADD = { study: () => openAddTask(), event: () => openEvent(), hobby: () => openAddHobby() };
+document.querySelectorAll("[data-to]").forEach((b) => (b.onclick = () => {
+  if (b.classList.contains("active")) return;
+  closeModals(); ADD[b.dataset.to]();
+}));
+$("ev-save").onclick = async () => {
+  const weekly = document.querySelector('input[name="ev-rep"]:checked').value === "weekly";
+  const body = { title: $("ev-title").value.trim(), start: $("ev-start").value, end: $("ev-end").value, work: $("ev-work").checked };
+  if (!body.title) return toast("Give the event a title.");
+  if (weekly) {
+    body.days = [...$("ev-days").querySelectorAll("input:checked")].map((c) => c.value);
+    if (!body.days.length) return toast("Pick the days it repeats on.");
+  } else {
+    body.date = $("ev-date").value;
+    if (!body.date) return toast("Pick the date.");
+  }
+  if (!body.start || !body.end) return toast("Give a start and an end time.");
+  if (body.end <= body.start) return toast("The event must end after it starts.");
+  if (eventRef !== null) body.ref = eventRef;
+  closeModals();
+  const before = PLAN;
+  await refresh(eventRef === null ? "/api/events" : "/api/events/edit", body);
+  if (PLAN !== before) toast(`${body.title} ${eventRef === null ? "added" : "updated"}.`);
+};
+$("ev-skip").onclick = async () => {
+  const ev = PLAN.events[eventRef];
+  closeModals();
+  const before = PLAN;
+  await refresh("/api/events/delete", { ref: eventRef, only: eventDate });
+  if (PLAN !== before) toast(`${ev.title} skipped on ${niceDate(new Date(`${eventDate}T00:00`))}.`);
+};
+$("ev-delete").onclick = async () => {
+  const ev = PLAN.events[eventRef];
+  if (!confirm(ev.date ? `Delete "${ev.title}"?` : `Delete "${ev.title}" on every week? (Use "Skip this day" for just this one.)`)) return;
+  closeModals();
+  const before = PLAN;
+  await refresh("/api/events/delete", { ref: eventRef });
+  if (PLAN !== before) toast(`${ev.title} deleted.`);
+};
+
+// ------------------------------------------------------------------ classes
+let classCtx = null;  // {area, date, start, end} of the clicked class, or {area, extra: true}
+function openClass(area, date, start, end) {
+  classCtx = { area, date, start, end };
+  $("cl-heading").textContent = `${area} class`;
+  $("cl-meta").textContent = `${niceDate(new Date(`${date}T00:00`))}, ${start}-${end}. Changes this one class only, not the weekly timetable.`;
+  $("cl-cancel-row").classList.remove("hidden");
+  $("cl-to-label").classList.remove("hidden");
+  $("cl-date").value = date; $("cl-start").value = start; $("cl-end").value = end;
+  $("cl-save").textContent = "Move and re-plan";
+  $("class-modal").classList.add("open");
+}
+function openExtraClass(area) {
+  const t = (SUBJECTS.find((x) => x.name === area) || {}).timetable || [];
+  classCtx = { area, extra: true };
+  $("cl-heading").textContent = `Extra ${area} class`;
+  $("cl-meta").textContent = "A one-off class, e.g. a makeup lecture. It blocks its time and gets a lecture like any other.";
+  $("cl-cancel-row").classList.add("hidden");
+  $("cl-to-label").classList.add("hidden");
+  $("cl-date").value = ""; $("cl-start").value = t.length ? t[0].start : ""; $("cl-end").value = t.length ? t[0].end : "";
+  $("cl-save").textContent = "Add and re-plan";
+  $("class-modal").classList.add("open");
+}
+async function classChange(body, done) {
+  closeModals();
+  const before = PLAN;
+  await refresh("/api/classes", body);
+  if (PLAN !== before) toast(done);
+}
+$("cl-cancel").onclick = () => {
+  const c = classCtx;
+  if (!confirm(`Cancel the ${c.area} class on ${niceDate(new Date(`${c.date}T00:00`))}? You can undo it on the ${c.area} subject page.`)) return;
+  classChange({ action: "cancel", area: c.area, date: c.date, start: c.start }, `${c.area} class cancelled.`);
+};
+$("cl-save").onclick = () => {
+  const c = classCtx, to = [$("cl-date").value, $("cl-start").value, $("cl-end").value];
+  if (!to[0] || !to[1] || !to[2]) return toast("Give the date, start and end.");
+  if (to[2] <= to[1]) return toast("The class must end after it starts.");
+  if (c.extra) return classChange({ action: "extra", area: c.area, to }, `Extra ${c.area} class added.`);
+  if (to[0] === c.date && to[1] === c.start && to[2] === c.end) return toast("That's the same time; change the date or time to move it.");
+  classChange({ action: "move", area: c.area, date: c.date, start: c.start, to }, `${c.area} class moved.`);
+};
+
+// ------------------------------------------------------------------ add a task
+async function openAddTask(area) {
+  if (!SUBJECTS) SUBJECTS = await api("/api/subjects", null, "Loading...");
+  const sel = $("tm-area");
+  const areas = PLAN.areas.filter((a) => a.kind !== "hobby");
+  sel.innerHTML = areas.map((a) => `<option>${esc(a.name)}</option>`).join("") +
+    (areas.some((a) => a.name.toLowerCase() === "other") ? "" : `<option value="__other__">Other (not a course)</option>`) +
+    `<option value="__new__">+ New subject...</option>`;
+  if (area) sel.value = area;
+  $("tm-new-name").value = "";
+  fillExams();
+  $("tm-title").value = "";
+  $("task-modal").classList.add("open");
+  $("tm-title").focus();
+}
+function fillExams() {
+  $("tm-new-field").classList.toggle("hidden", $("tm-area").value !== "__new__");
+  const subj = (SUBJECTS || []).find((s) => s.name === $("tm-area").value);
+  const exams = subj ? subj.milestones.filter((m) => new Date(m.at) > new Date(PLAN.now)) : [];
+  $("tm-exam").innerHTML = exams.map((m) => `<option value="${esc(m.id)}">${esc(m.title)} (${niceDate(new Date(m.at))})</option>`).join("")
+    || `<option value="">No upcoming exams</option>`;
+}
+$("tm-area").onchange = fillExams;
+document.querySelectorAll('input[name="tm-kind"]').forEach((r) => (r.onchange = () => {
+  const kind = document.querySelector('input[name="tm-kind"]:checked').value;
+  $("tm-due-field").classList.toggle("hidden", kind !== "due");
+  $("tm-exam-field").classList.toggle("hidden", kind !== "exam");
+}));
+$("tm-save").onclick = () => {
+  const kind = document.querySelector('input[name="tm-kind"]:checked').value;
+  const body = { area: $("tm-area").value, title: $("tm-title").value, estimate_hr: parseDur($("tm-hours").value) };
+  if (!body.title.trim()) return toast("Give the task a title.");
+  if (!(body.estimate_hr > 0)) return toast(`Time needed must be more than 0. ${DUR_HELP}`);
+  if (body.area === "__other__") body.new_area = { name: "Other", kind: "other" };
+  if (body.area === "__new__") {
+    if (!$("tm-new-name").value.trim()) return toast("Give the new subject a name.");
+    body.new_area = { name: $("tm-new-name").value.trim(), kind: $("tm-new-kind").value };
+  }
+  if (kind === "due") { if (!$("tm-due").value) return toast("Pick a due date."); body.due = $("tm-due").value; }
+  if (kind === "exam") { if (!$("tm-exam").value) return toast("That subject has no upcoming exam."); body.counts_toward = $("tm-exam").value; }
+  closeModals();
+  refresh("/api/tasks", body);
+};
+
+// ------------------------------------------------------------------ add an exam
+let examArea = null, examId = null;  // examId is set when editing an exam
+function openAddExam(area) {
+  examArea = area; examId = null;
+  $("em-heading").textContent = `Add an exam to ${area}`;
+  $("em-meta").textContent = "Lectures after the previous exam count toward it, and a revision item is planned before it.";
+  $("em-rev-field").classList.remove("hidden");
+  for (const id of ["em-date", "em-start", "em-end", "em-syl"]) $(id).value = "";
+  $("em-title").value = `${area} `;
+  $("em-rev").value = "6h";
+  $("em-save").textContent = "Add and re-plan";
+  $("exam-modal").classList.add("open");
+  $("em-title").focus();
+}
+function openEditExam(area, id) {
+  const m = SUBJECTS.find((s) => s.name === area).milestones.find((x) => x.id === id);
+  examArea = area; examId = id;
+  $("em-heading").textContent = `Edit ${m.title}`;
+  $("em-meta").textContent = "Its tasks and revision stay with it. Change revision hours with Edit on its revision task.";
+  $("em-rev-field").classList.add("hidden");
+  $("em-title").value = m.title;
+  $("em-date").value = m.at.slice(0, 10);
+  $("em-start").value = m.start || ""; $("em-end").value = m.end || "";
+  $("em-syl").value = m.syllabus_until || "";
+  $("em-save").textContent = "Save and re-plan";
+  $("exam-modal").classList.add("open");
+  $("em-title").focus();
+}
+$("em-save").onclick = async () => {
+  const body = { area: examArea, title: $("em-title").value.trim(), date: $("em-date").value,
+                 start: $("em-start").value, end: $("em-end").value, syllabus_until: $("em-syl").value };
+  if (!examId) body.revision_hr = parseDur($("em-rev").value || "0");
+  if (!body.title || body.title === examArea) return toast("Give the exam a title.");
+  if (!body.date) return toast("Pick the exam date.");
+  if (!examId && !(body.revision_hr >= 0)) return toast(`Revision time: ${DUR_HELP}`);
+  if (!!body.start !== !!body.end) return toast("Give both a start and an end time, or neither.");
+  if (body.start && body.end <= body.start) return toast("The exam must end after it starts.");
+  closeModals();
+  const before = PLAN;
+  if (examId) await refresh("/api/exams/edit", { ...body, id: examId });
+  else await refresh("/api/exams", body);
+  if (PLAN !== before) toast(`${body.title} ${examId ? "updated" : "added"}.`);
+  showView("subjects");
+};
+
+// ------------------------------------------------------------------ subjects
+async function renderSubjects() {
+  if (!SUBJECTS) SUBJECTS = await api("/api/subjects", null, "Loading...");
+  if (!currentSubject || !SUBJECTS.find((s) => s.name === currentSubject)) currentSubject = (SUBJECTS[0] || {}).name;
+  $("subject-tabs").innerHTML = SUBJECTS.map((s) =>
+    `<button class="${s.name === currentSubject ? "active" : ""}" data-s="${esc(s.name)}"><span class="dot" style="background:${color(s.name)}"></span>${esc(s.name)}</button>`).join("") +
+    `<button class="primary" id="subj-new">+ Add subject</button>`;
+  $("subject-tabs").querySelectorAll("button[data-s]").forEach((b) => (b.onclick = () => { currentSubject = b.dataset.s; renderSubjects(); }));
+  $("subj-new").onclick = openAddSubject;
+
+  const subj = SUBJECTS.find((s) => s.name === currentSubject);
+  if (!subj) {
+    $("subject-body").innerHTML = `<div class="sub" style="color:var(--muted)">No subjects yet. Add every subject you have this semester with
+      <b>+ Add subject</b>, with its weekly classes; then add its exams and tasks on its page.</div>`;
+    return;
+  }
+  const open = subj.items.filter((i) => !i.done), done = subj.items.filter((i) => i.done);
+  const row = (i) => `<tr class="${i.done ? "done" : ""}">
+      <td><input type="checkbox" data-id="${esc(i.id)}" ${i.done ? "checked disabled" : ""}></td>
+      <td>${esc(i.title)}</td>
+      <td>${i.done ? "done" : hm(i.left_min) + " left"}${i.sessions_logged ? ` &middot; ${i.sessions_logged} session${i.sessions_logged > 1 ? "s" : ""}` : ""}${i.done ? `<button class="linkbtn" data-reopen="${esc(i.id)}">Reopen</button>` : ""}${i.revision && i.done ? "" : `<button class="linkbtn" data-edit="${esc(i.id)}">Edit</button>`}</td>
+      <td>${i.finish_by ? niceDate(new Date(i.finish_by)) : "-"}</td>
+      <td>${i.toward ? esc(i.toward) : ""}</td></tr>`;
+  $("subject-body").innerHTML = `
+    <div class="chips">${subj.milestones.map((m) => `<span class="chip">${esc(m.title)}: ${niceDate(new Date(m.at))} ${hhmm(new Date(m.at))}
+      <button class="linkbtn" data-exam="${esc(m.id)}">Edit</button></span>`).join("")}</div>
+    <div class="olabel" style="margin-top:12px">Weekly classes</div>
+      ${subj.timetable.map((t) => `<div class="orow" style="cursor:default;max-width:520px">
+        <span>${DAY_NAMES[t.day]} ${t.start}-${t.end}</span>
+        <button class="linkbtn" data-wc-day="${t.day}" data-wc-start="${t.start}">Remove</button></div>`).join("")
+        || `<div class="sub" style="color:var(--muted)">No weekly classes.</div>`}
+      <button class="linkbtn" id="subj-weekly" style="margin:4px 0 0">+ Weekly class</button>
+    ${subj.timetable.length || subj.class_changes.length ? `
+      <div class="sub" style="color:var(--muted);margin-top:6px">Click a class on the week view to cancel or move just that one.</div>
+      <label class="sub" style="display:block;margin:6px 0"><input type="checkbox" id="subj-lectures" ${subj.lecture_items ? "checked" : ""}>
+        Add a lecture to study after each class</label>
+      ${subj.class_changes.map((c, n) => {
+        const d = (x) => niceDate(new Date(`${x}T00:00`));
+        const what = c.cancel ? `Cancelled ${d(c.cancel)}` : c.move ? `Moved ${d(c.move)} → ${d(c.to[0])} ${c.to[1]}-${c.to[2]}` : `Extra class ${d(c.extra[0])} ${c.extra[1]}-${c.extra[2]}`;
+        return `<div class="orow" style="cursor:default;max-width:520px"><span>${what}</span><button class="linkbtn" data-undo="${n}">${c.extra ? "Remove" : "Undo"}</button></div>`;
+      }).join("")}` : ""}
+    ${subj.weekly.length ? `<div class="olabel" style="margin-top:12px">Weekly study</div>` + subj.weekly.map((w) => {
+      const form = w.fixed ? "fixed times" : w.sessions_per_week ? `${w.sessions_per_week} × ${hm(w.session_min)} a week` : `${hm(w.weekly_min)} a week`;
+      const now = PLAN.weekly.find((x) => x.id === w.id && x.week === isoDate(monday(new Date(PLAN.now))));
+      return `<div class="dl" style="max-width:520px"><div class="row"><span class="name">${esc(w.title)} <span class="sub">${form}</span>
+          <button class="linkbtn" data-act="${esc(w.id)}">Edit</button></span>
+        ${now ? `<span class="sub">this week ${hm(now.done_min)} done + ${hm(now.planned_min)} planned / ${hm(now.target_min)}</span>` : ""}</div>
+        ${now ? weeklyBar(now) : ""}</div>`;
+    }).join("") : ""}
+    <div class="toolbar">
+      <button id="mark-done" class="primary" disabled>Mark selected done</button>
+      <button id="subj-add">+ Add task to ${esc(subj.name)}</button>
+      <button id="subj-exam">+ Add exam</button>
+      <button id="subj-extra">+ Extra class</button>
+      <span class="sub" style="color:var(--muted)">${open.length} open, ${done.length} done</span>
+    </div>
+    <table><thead><tr><th></th><th>Task</th><th>Status</th><th>Finish by</th><th>For</th></tr></thead>
+      <tbody>${open.map(row).join("")}${done.map(row).join("")}</tbody></table>`;
+  const boxes = [...$("subject-body").querySelectorAll("input[type=checkbox][data-id]:not([disabled])")];
+  const markBtn = $("mark-done");
+  boxes.forEach((b) => (b.onchange = () => {
+    const n = boxes.filter((x) => x.checked).length;
+    markBtn.disabled = !n; markBtn.textContent = n ? `Mark ${n} done` : "Mark selected done";
+  }));
+  markBtn.onclick = async () => {
+    // Time put in that wasn't logged as a session (e.g. a task the plan couldn't fit), so it
+    // shows in today's hours.
+    const ids = boxes.filter((x) => x.checked).map((x) => x.dataset.id), spent_hr = {};
+    for (const id of ids) {
+      const it = subj.items.find((x) => x.id === id);
+      const answer = prompt(`"${it.title}" done. How much time did you spend on it that you haven't logged yet? (e.g. 50m or 1h 30m; 0 if none)`,
+        fmtDur(it.left_min / 60));
+      if (answer === null) return;
+      const hr = parseDur(answer || "0");
+      if (!(hr >= 0)) return toast(DUR_HELP);
+      if (hr > 0) spent_hr[id] = hr;
+    }
+    await refresh("/api/done", { ids, spent_hr });
+    showView("subjects");
+  };
+  $("subj-add").onclick = () => openAddTask(subj.name);
+  $("subject-body").querySelectorAll("[data-act]").forEach((b) => (b.onclick = () => openActivity(b.dataset.act)));
+  $("subj-exam").onclick = () => openAddExam(subj.name);
+  $("subject-body").querySelectorAll("[data-exam]").forEach((b) => (b.onclick = () => openEditExam(subj.name, b.dataset.exam)));
+  $("subj-extra").onclick = () => openExtraClass(subj.name);
+  $("subj-weekly").onclick = () => openWeeklyClass(subj.name);
+  $("subject-body").querySelectorAll("[data-wc-day]").forEach((b) => (b.onclick = async () => {
+    const day = b.dataset.wcDay, start = b.dataset.wcStart;
+    if (!confirm(`Remove the weekly ${subj.name} class on ${DAY_NAMES[day]} at ${start}? It stops blocking that time every week` +
+                 (subj.lecture_items ? `, and its lectures that aren't done go too.` : "."))) return;
+    const before = PLAN;
+    await refresh("/api/timetable", { area: subj.name, action: "remove", day, start });
+    if (PLAN !== before) toast(`${subj.name} class removed.`);
+    showView("subjects");
+  }));
+  if ($("subj-lectures")) $("subj-lectures").onchange = async (e) => {
+    const on = e.target.checked;
+    if (!confirm(on ? `Add a lecture after each ${subj.name} class? Lectures since you started tracking come back too, except ones done or deleted.`
+                    : `Stop adding ${subj.name} lectures? Every ${subj.name} lecture is removed, old ones included; the classes still block their time.`)) {
+      e.target.checked = !on; return;
+    }
+    const before = PLAN;
+    await refresh("/api/lectures", { area: subj.name, on });
+    if (PLAN !== before) toast(on ? `${subj.name} lectures on.` : `${subj.name} lectures off.`);
+    showView("subjects");
+  };
+  $("subject-body").querySelectorAll("[data-undo]").forEach((b) => (b.onclick = () =>
+    classChange({ action: "undo", area: subj.name, index: +b.dataset.undo }, "Class change undone.")));
+  $("subject-body").querySelectorAll("[data-edit]").forEach((b) => (b.onclick = () => openEdit(b.dataset.edit)));
+  $("subject-body").querySelectorAll("[data-reopen]").forEach((b) => (b.onclick = async () => {
+    const it = subj.items.find((x) => x.id === b.dataset.reopen);
+    const guess = fmtDur(Math.max(0.5, Math.round((it.total_min - it.spent_min) / 15) / 4));
+    const answer = prompt(`Reopen "${it.title}". How much time is still needed? (e.g. 50m or 1h 30m)`, guess);
+    if (answer === null) return;
+    const left_hr = parseDur(answer);
+    if (!(left_hr > 0)) return toast(DUR_HELP);
+    await refresh("/api/reopen", { id: it.id, left_hr });
+    showView("subjects");
+  }));
+}
+
+// ------------------------------------------------------------------ add a subject, weekly classes
+const dayOptions = () => WEEK_DAYS.map((d) => `<option value="${d}">${DAY_NAMES[d]}</option>`).join("");
+function addClassRow(day = "mon", start = "", end = "") {
+  const row = document.createElement("div");
+  row.className = "radios sb-class";
+  row.style.cssText = "gap:6px;margin-bottom:6px;align-items:center";
+  row.innerHTML = `<select style="flex:1.3">${dayOptions()}</select><input type="time" style="flex:1" value="${start}">
+    <input type="time" style="flex:1" value="${end}"><button title="Remove this class">&times;</button>`;
+  row.querySelector("select").value = day;
+  row.querySelector("button").onclick = () => row.remove();
+  $("sb-classes").appendChild(row);
+}
+function openAddSubject() {
+  $("sb-name").value = "";
+  $("sb-kind").value = "subject";
+  $("sb-classes").innerHTML = "";
+  addClassRow();
+  $("sb-lectures").checked = true;
+  $("subject-modal").classList.add("open");
+  $("sb-name").focus();
+}
+$("sb-add-class").onclick = () => {  // a new row starts like the last one, a day later
+  const rows = [...document.querySelectorAll(".sb-class")], last = rows[rows.length - 1];
+  if (!last) return addClassRow();
+  const [day, start, end] = [...last.querySelectorAll("select, input")].map((x) => x.value);
+  addClassRow(WEEK_DAYS[(WEEK_DAYS.indexOf(day) + 1) % 7], start, end);
+};
+$("sb-kind").onchange = () => { $("sb-lectures").checked = $("sb-kind").value !== "other"; };
+$("sb-save").onclick = async () => {
+  const name = $("sb-name").value.trim();
+  if (!name) return toast("Give the subject a name.");
+  const classes = [];
+  for (const row of document.querySelectorAll(".sb-class")) {
+    const [day, start, end] = [...row.querySelectorAll("select, input")].map((x) => x.value);
+    if (!start && !end) continue;  // an empty row is ignored
+    if (!start || !end) return toast("Give each class a start and an end time.");
+    if (end <= start) return toast("A class must end after it starts.");
+    classes.push([day, start, end]);
+  }
+  closeModals();
+  const before = PLAN;
+  await refresh("/api/areas", { name, kind: $("sb-kind").value, classes, lectures: $("sb-lectures").checked });
+  if (PLAN === before) return;
+  toast(`${name} added.`);
+  currentSubject = name;
+  showView("subjects");
+};
+
+let weeklyArea = null;
+function openWeeklyClass(area) {
+  weeklyArea = area;
+  $("wc-heading").textContent = `Add a weekly ${area} class`;
+  $("wc-day").innerHTML = dayOptions();
+  $("wc-start").value = ""; $("wc-end").value = "";
+  $("weekly-modal").classList.add("open");
+}
+$("wc-save").onclick = async () => {
+  const body = { area: weeklyArea, action: "add", day: $("wc-day").value, start: $("wc-start").value, end: $("wc-end").value };
+  if (!body.start || !body.end) return toast("Give the class a start and an end time.");
+  if (body.end <= body.start) return toast("The class must end after it starts.");
+  closeModals();
+  const before = PLAN;
+  await refresh("/api/timetable", body);
+  if (PLAN !== before) toast(`${weeklyArea} class added.`);
+  showView("subjects");
+};
+
+// ------------------------------------------------------------------ settings
+const DAY_NAMES = { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" };
+const WEEK_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const CELL = 30, CELLS = 24 * 60 / CELL;  // the grid is in half hours
+let AVAIL = {}, painting = null;
+
+async function renderSettings() {
+  const s = await api("/api/settings", null, "Loading...");
+  $("st-name").value = s.semester.name || "";
+  $("st-start").value = s.semester.start || "";
+  $("st-end").value = s.semester.end || "";
+  // A cell is free if a slot covers all of it.
+  for (const d of WEEK_DAYS) {
+    AVAIL[d] = [...Array(CELLS)].map((_, i) =>
+      (s.availability[d] || []).some(([a, b]) => toMin(a) <= i * CELL && (i + 1) * CELL <= toMin(b)));
+  }
+  const limits = Object.fromEntries(s.week.map((r) => [r.day, r]));
+  const classCell = (d, i) => (s.classes[d] || []).find((c) => toMin(c.start) < (i + 1) * CELL && i * CELL < toMin(c.end));
+  let html = `<div></div>` + WEEK_DAYS.map((d) => `<div class="h">${DAY_NAMES[d].slice(0, 3)}<span class="sub" id="st-tot-${d}"></span></div>`).join("");
+  for (let i = 0; i < CELLS; i++) {
+    html += `<div class="t">${i % 2 === 0 && i ? `${pad(i / 2)}:00` : ""}</div>`;
+    for (const d of WEEK_DAYS) {
+      const c = classCell(d, i), first = c && toMin(c.start) >= i * CELL;
+      html += `<div class="c${i % 2 === 0 ? " hr" : ""}${c ? " cls" : ""}" data-d="${d}" data-i="${i}"
+                 ${c ? `title="${esc(c.title)} class ${c.start}-${c.end}"` : ""}>${first ? `<span class="lbl">${esc(c.title)}</span>` : ""}</div>`;
+    }
+  }
+  html += `<div class="fl">Max hr</div>` + WEEK_DAYS.map((d) =>
+    `<div class="f"><input type="number" class="st-max" data-d="${d}" step="0.5" min="0" max="24" value="${limits[d].max_work_hr}"></div>`).join("");
+  html += `<div class="fl">Min hr</div>` + WEEK_DAYS.map((d) =>
+    `<div class="f"><input type="number" class="st-mn" data-d="${d}" step="0.5" min="0" max="24" value="${limits[d].min_work_hr}"></div>`).join("");
+  $("st-grid").innerHTML = html;
+  $("st-copy-from").innerHTML = WEEK_DAYS.map((d) => `<option value="${d}">${DAY_NAMES[d]}</option>`).join("");
+  paintGrid();
+  $("st-smin").value = s.min_session_min;
+  $("st-smax").value = s.max_session_min;
+}
+function paintGrid() {
+  $("st-grid").querySelectorAll(".c").forEach((el) => el.classList.toggle("on", AVAIL[el.dataset.d][+el.dataset.i]));
+  for (const d of WEEK_DAYS) $(`st-tot-${d}`).textContent = hm(AVAIL[d].filter(Boolean).length * CELL);
+}
+// Drag to paint: the first cell decides whether this drag marks or unmarks.
+function paintAt(el) {
+  if (!el || !el.classList || !el.classList.contains("c")) return;
+  const d = el.dataset.d, i = +el.dataset.i;
+  if (AVAIL[d][i] === painting) return;
+  AVAIL[d][i] = painting;
+  el.classList.toggle("on", painting);
+  $(`st-tot-${d}`).textContent = hm(AVAIL[d].filter(Boolean).length * CELL);
+}
+$("st-grid").addEventListener("pointerdown", (e) => {
+  const el = e.target.closest(".c");
+  if (!el) return;
+  e.preventDefault();
+  painting = !AVAIL[el.dataset.d][+el.dataset.i];
+  paintAt(el);
+});
+document.addEventListener("pointermove", (e) => {
+  if (painting === null) return;
+  paintAt(document.elementFromPoint(e.clientX, e.clientY));
+});
+document.addEventListener("pointerup", () => (painting = null));
+document.querySelectorAll("[data-copy]").forEach((b) => (b.onclick = () => {
+  const from = $("st-copy-from").value;
+  const to = { weekdays: WEEK_DAYS.slice(0, 5), weekend: ["sat", "sun"], all: WEEK_DAYS }[b.dataset.copy];
+  for (const d of to) AVAIL[d] = [...AVAIL[from]];
+  paintGrid();
+}));
+$("st-clear").onclick = () => {
+  if (!confirm("Clear every study slot?")) return;
+  for (const d of WEEK_DAYS) AVAIL[d] = Array(CELLS).fill(false);
+  paintGrid();
+};
+// Marked cells as [start, end] slots; an end at midnight is "24:00".
+const slotsOf = (cells) => {
+  const out = [];
+  cells.forEach((on, i) => {
+    if (!on) return;
+    const a = `${pad(Math.floor(i * CELL / 60))}:${pad(i * CELL % 60)}`, b = `${pad(Math.floor((i + 1) * CELL / 60))}:${pad((i + 1) * CELL % 60)}`;
+    if (i && cells[i - 1]) out[out.length - 1][1] = b; else out.push([a, b]);
+  });
+  return out;
+};
+$("st-reset").onclick = renderSettings;
+$("st-save").onclick = async () => {
+  const val = (cls, d) => +$("st-grid").querySelector(`.${cls}[data-d="${d}"]`).value;
+  const week = WEEK_DAYS.map((d) => ({ day: d, max_work_hr: val("st-max", d), min_work_hr: val("st-mn", d) }));
+  for (const r of week) {
+    if (r.min_work_hr > r.max_work_hr) return toast(`${DAY_NAMES[r.day]}: the minimum is above the maximum.`);
+  }
+  if (WEEK_DAYS.every((d) => !AVAIL[d].some(Boolean))) return toast("Mark at least some time when you can study.");
+  const availability = Object.fromEntries(WEEK_DAYS.map((d) => [d, slotsOf(AVAIL[d])]));
+  const body = { semester: { name: $("st-name").value.trim(), start: $("st-start").value, end: $("st-end").value },
+                 availability, week, min_session_min: +$("st-smin").value, max_session_min: +$("st-smax").value };
+  const sem = body.semester;
+  if ((sem.start || sem.end) && !(sem.start && sem.end)) return toast("Give the semester both a start and an end.");
+  if (sem.start && sem.end <= sem.start) return toast("The semester must end after it starts.");
+  if (body.min_session_min > body.max_session_min) return toast("The shortest session can't be longer than the longest.");
+  const before = PLAN;
+  await refresh("/api/settings", body);
+  if (PLAN !== before) toast("Settings saved.");
+};
+
+// ------------------------------------------------------------------ views
+function showView(name) {
+  for (const v of ["week", "month", "subjects", "stats", "settings"]) {
+    $(`view-${v}`).classList.toggle("hidden", name !== v);
+    $(`nav-${v}`).classList.toggle("active", name === v);
+  }
+  if (name === "week") renderWeek();
+  if (name === "month") renderMonth();
+  if (name === "subjects") renderSubjects();
+  if (name === "settings") renderSettings();
+  if (name === "stats") renderStats(true);
+}
+
+// ------------------------------------------------------------------ stats
+// Hours studied per day over a week or a calendar month, from the progress log
+// (counted the same way as the Today tally).
+let STATS = null, statsMode = "week", statsStart = null;
+async function renderStats(reload) {
+  if (reload || !STATS) {
+    try { STATS = await api("/api/stats", null, "Loading..."); }
+    catch (e) { return toast(`Couldn't load stats (${e.message}). Restart HeadStart if it was started before the Stats tab was added.`); }
+  }
+  const now = new Date(PLAN.now), todayKey = isoDate(now);
+  if (!statsStart) statsStart = monday(now);
+  const days = [], first = new Date(statsStart);
+  if (statsMode === "week") for (let i = 0; i < 7; i++) { const d = new Date(first); d.setDate(d.getDate() + i); days.push(d); }
+  else for (const d = new Date(first); d.getMonth() === first.getMonth(); d.setDate(d.getDate() + 1)) days.push(new Date(d));
+  const last = days[days.length - 1];
+  $("srange").textContent = statsMode === "week"
+    ? `${first.getDate()} ${MONTHS[first.getMonth()]} - ${last.getDate()} ${MONTHS[last.getMonth()]}`
+    : `${MONTHS[first.getMonth()]} ${first.getFullYear()}`;
+  $("st-week").classList.toggle("active", statsMode === "week");
+  $("st-month").classList.toggle("active", statsMode === "month");
+
+  const byDate = Object.fromEntries(STATS.days.map((d) => [d.date, d]));
+  const rows = days.map((d) => {
+    const key = isoDate(d);
+    return { d, key, future: key > todayKey, ...(byDate[key] || { study_min: 0, sessions: 0, tasks_done: 0, min_min: 0 }) };
+  });
+  const past = rows.filter((r) => !r.future);
+  const sum = (k) => past.reduce((n, r) => n + r[k], 0);
+  const total = sum("study_min"), studied = past.filter((r) => r.study_min > 0).length;
+  const withMin = past.filter((r) => r.min_min > 0), hit = withMin.filter((r) => r.study_min >= r.min_min);
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const tile = (lbl, num, sub) => `<div class="card tile"><div class="lbl">${lbl}</div><div class="num">${num}</div><div class="sub">${sub}</div></div>`;
+  $("stat-tiles").innerHTML =
+    tile("Studied", fmtDur(total / 60), past.length ? `avg ${fmtDur(total / 60 / past.length)} a day, studied on ${studied} of ${past.length} days` : "not started yet") +
+    tile("Sessions", sum("sessions"), "study sessions logged") +
+    tile("Tasks done", sum("tasks_done"), "tasks finished + hobby sessions") +
+    tile("Streak", plural(STATS.streak, "day"), `in a row with some study (best ${STATS.best_streak})`) +
+    tile("Days on target", withMin.length ? `${hit.length} of ${withMin.length}` : "-",
+         withMin.length ? "days you reached that day's minimum" : "set a daily minimum in Settings to track this");
+
+  const firstLog = STATS.days.length ? STATS.days[0].date : todayKey;
+  $("stat-note").textContent = `Counts the sessions you log (log starts ${niceDate(new Date(firstLog + "T00:00"))}). ` +
+    "Hover a bar for details. The dashed mark is that day's minimum; ✓ means you reached it.";
+  const top = Math.ceil(Math.max(2, ...rows.map((r) => r.study_min / 60), ...rows.map((r) => r.min_min / 60)));
+  const step = top > 8 ? 2 : 1, y = (h) => `${h / top * 100}%`;
+  let html = "";
+  for (let h = step; h <= top; h += step) html += `<div class="gl" style="bottom:${y(h)}"><span>${h}h</span></div>`;
+  html += rows.map((r) => {
+    const h = r.study_min / 60, tip = r.future ? `${dayLabel(r.d)}: still to come`
+      : `${dayLabel(r.d)}: ${fmtDur(h)} studied, ${plural(r.sessions, "session")}, ${plural(r.tasks_done, "task")} done` +
+        (r.min_min > 0 ? ` (minimum ${fmtDur(r.min_min / 60)})` : "");
+    // Week: every bar labelled; month: only the taller bars, so labels don't collide.
+    const val = h > 0 && (statsMode === "week" || h >= top * 0.2)
+      ? `<div class="val">${statsMode === "week" ? fmtDur(h) : Math.round(h * 10) / 10}</div>` : "";
+    const tick = r.min_min > 0 ? `<div class="mintick" style="bottom:${y(r.min_min / 60)}"></div>` : "";
+    return `<div class="scol" title="${esc(tip)}">${val}<div class="bar" style="height:${y(h)}"></div>${tick}</div>`;
+  }).join("");
+  $("stat-bars").innerHTML = html;
+  $("stat-labels").innerHTML = rows.map((r) => {
+    const ok = r.min_min > 0 && !r.future && r.study_min >= r.min_min;
+    const lbl = statsMode === "week" ? dayLabel(r.d) : r.d.getDate();
+    return `<div class="${r.key === todayKey ? "today" : ""}">${lbl}${ok ? '<div class="hit">✓</div>' : ""}</div>`;
+  }).join("");
+}
+function moveStats(dir) {
+  if (statsMode === "week") statsStart.setDate(statsStart.getDate() + 7 * dir);
+  else statsStart = new Date(statsStart.getFullYear(), statsStart.getMonth() + dir, 1);
+  renderStats();
+}
+function setStatsMode(mode) {
+  statsMode = mode;
+  const now = new Date(PLAN.now);
+  statsStart = mode === "week" ? monday(now) : new Date(now.getFullYear(), now.getMonth(), 1);
+  renderStats();
+}
+function render() {
+  $("clock").textContent = `${niceDate(new Date(PLAN.now))}, ${hhmm(new Date(PLAN.now))}`;
+  const sem = PLAN.semester;
+  $("semester").textContent = !sem ? "" : sem.week && sem.week >= 1 && sem.week <= sem.weeks
+    ? `${sem.name} · week ${sem.week} of ${sem.weeks}` : sem.name;
+  if (!weekStart) weekStart = monday(new Date(PLAN.now));
+  if (!monthStart) monthStart = monday(new Date(PLAN.now));
+  renderNow(); renderWeek(); renderSide();
+  if (!$("view-month").classList.contains("hidden")) renderMonth();
+  if (!$("view-subjects").classList.contains("hidden")) renderSubjects();
+  renderHosted();
+}
+
+// ------------------------------------------------------------------ first screen, guide, demo
+// The guide shows on a hosted planner until "Got it", remembered per planner in this browser.
+const GUIDE_KEY = `guide-hidden:${location.pathname}`;
+const guideHidden = () => { try { return localStorage.getItem(GUIDE_KEY) === "1"; } catch { return false; } };
+function showGuide(on) {
+  $("guide").classList.toggle("hidden", !on);
+  try { if (on) localStorage.removeItem(GUIDE_KEY); else localStorage.setItem(GUIDE_KEY, "1"); } catch {}
+}
+function renderHosted() {
+  $("nav-home").classList.toggle("hidden", !PLAN.hosted);
+  $("demo-bar").classList.toggle("hidden", !PLAN.demo);
+  if (PLAN.needs_setup) {
+    $("setup-modal").classList.add("open");
+    $("guide").classList.add("hidden");
+  } else if (PLAN.hosted && !guideHidden()) {
+    $("guide").classList.remove("hidden");
+  }
+}
+$("su-save").onclick = async () => {
+  const body = { name: $("su-name").value.trim(), start: $("su-start").value, end: $("su-end").value };
+  if (!body.start || !body.end) return toast("Give the semester's start and end dates.");
+  if (body.end <= body.start) return toast("The semester must end after it starts.");
+  $("setup-modal").classList.remove("open");
+  await refresh("/api/semester", body, "Setting up your planner...");
+  if (PLAN.needs_setup) return renderHosted();  // it failed: back to the first screen
+  showGuide(true); showView("week");
+};
+$("btn-reset").onclick = async () => {
+  if (!confirm("Reset the demo? Everything in it is wiped and it starts again from the first screen.")) return;
+  try { localStorage.removeItem(GUIDE_KEY); } catch {}
+  await refresh("/api/reset", {}, "Resetting the demo...");
+  showView("week");
+};
+$("btn-guide").onclick = () => { showView("week"); showGuide(true); };
+$("guide-close").onclick = () => showGuide(false);
+$("guide-subjects").onclick = () => { showView("subjects"); if (typeof openAddSubject === "function") openAddSubject(); };
+$("guide-settings").onclick = () => showView("settings");
+$("guide-add").onclick = () => $("kind-modal").classList.add("open");
+// Keep the sticky week/month bar just below the header, whatever height the header wraps to.
+function fitHeader() {
+  document.documentElement.style.setProperty("--header-h", `${document.querySelector("header").offsetHeight}px`);
+}
+window.addEventListener("resize", fitHeader);
+fitHeader();
+
+function closeModals() {  // the first screen stays until the semester is set
+  document.querySelectorAll(".backdrop").forEach((m) => {
+    if (!(m.id === "setup-modal" && PLAN && PLAN.needs_setup)) m.classList.remove("open");
+  });
+}
+
+document.querySelectorAll("[data-close]").forEach((b) => (b.onclick = closeModals));
+document.querySelectorAll(".backdrop").forEach((m) => (m.onclick = (e) => { if (e.target === m) closeModals(); }));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModals(); });
+$("prev").onclick = () => { weekStart.setDate(weekStart.getDate() - 7); renderWeek(); };
+$("next").onclick = () => { weekStart.setDate(weekStart.getDate() + 7); renderWeek(); };
+$("today").onclick = () => { weekStart = monday(new Date(PLAN.now)); renderWeek(); };
+$("nav-week").onclick = () => showView("week");
+$("nav-month").onclick = () => showView("month");
+$("mprev").onclick = () => { monthStart.setDate(monthStart.getDate() - 28); renderMonth(); };
+$("mnext").onclick = () => { monthStart.setDate(monthStart.getDate() + 28); renderMonth(); };
+$("mtoday").onclick = () => { monthStart = monday(new Date(PLAN.now)); renderMonth(); };
+$("nav-subjects").onclick = () => showView("subjects");
+$("nav-settings").onclick = () => showView("settings");
+$("nav-stats").onclick = () => showView("stats");
+$("st-week").onclick = () => setStatsMode("week");
+$("st-month").onclick = () => setStatsMode("month");
+$("sprev").onclick = () => moveStats(-1);
+$("snext").onclick = () => moveStats(1);
+$("snow").onclick = () => setStatsMode(statsMode);
+$("btn-add").onclick = () => $("kind-modal").classList.add("open");
+$("btn-replan").onclick = () => refresh("/api/plan?force=1");
+
+refresh("/api/plan", null, "Building your plan... (10-30 s)");
+</script>
+</body>
+</html>
