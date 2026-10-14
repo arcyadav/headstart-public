@@ -20,6 +20,23 @@ def restore(root: str | Path, repo: str) -> None:
     snapshot_download(repo, repo_type="dataset", local_dir=root, allow_patterns=PATTERNS)
 
 
+def forget(repo: str, planner_id: str, again_after_s: float = 0) -> None:
+    """Delete a planner's folder from the dataset. With again_after_s, delete again after
+    that long, in case a push that was already under way brought it back."""
+    import time
+
+    from huggingface_hub import HfApi
+
+    for attempt in range(2 if again_after_s else 1):
+        if attempt:
+            time.sleep(again_after_s)
+        try:
+            HfApi().delete_folder(planner_id, repo_id=repo, repo_type="dataset",
+                                  commit_message="A planner was deleted")
+        except Exception:  # not saved yet, or already gone
+            pass
+
+
 def keep(root: str | Path, repo: str, every_min: float = 2):
     """Push changed planner files to the dataset every `every_min` minutes, in the
     background. Returns the scheduler (its .lock can guard a write)."""

@@ -11,7 +11,9 @@ import argparse
 import hmac
 import json
 import os
+import shutil
 import threading
+from contextlib import nullcontext
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -33,6 +35,7 @@ CONFIG = {"input": DEFAULT_INPUT, "progress": DEFAULT_PROGRESS, "now": None,
           "hosted": False, "planners": "planners"}
 LOCK = threading.Lock()  # one solve at a time
 CACHE: dict = {}  # setup file -> last plan
+SYNC: dict = {}  # on the site: the dataset keeping the planners, and its push scheduler
 
 
 def _now() -> datetime | None:
@@ -222,6 +225,22 @@ def publish():
         d = planners.publish(CONFIG["planners"], pid, body["setup"], body["progress"])
         CACHE.pop(planners.paths(d)["input"], None)
     return jsonify({"url": f"/p/{pid}/"})
+
+
+@app.post("/api/planner/delete")
+def delete_planner():
+    """Delete this online planner for good: its folder here and its copy in the dataset."""
+    pid = _planner()
+    if not pid:
+        return _error("only an online planner can be deleted here")
+    held = SYNC["scheduler"].lock if SYNC else nullcontext()  # not while a save is being made
+    with LOCK, held:
+        shutil.rmtree(Path(CONFIG["planners"]) / pid, ignore_errors=True)
+        CACHE.pop(_path("input"), None)
+    if SYNC:
+        from scheduler import sync
+        threading.Thread(target=sync.forget, args=(SYNC["repo"], pid, 180), daemon=True).start()
+    return jsonify({"deleted": True})
 
 
 @app.post("/api/semester")
@@ -834,7 +853,7 @@ def main() -> None:
         if dataset:  # on a Hugging Face Space: keep the planners in a private dataset
             from scheduler import sync
             sync.restore(args.planners, dataset)
-            sync.keep(args.planners, dataset)
+            SYNC.update(repo=dataset, scheduler=sync.keep(args.planners, dataset))
             print(f"HeadStart: planners kept in dataset {dataset}")
         print(f"HeadStart (hosted): open http://localhost:{args.port}")
         from waitress import serve
