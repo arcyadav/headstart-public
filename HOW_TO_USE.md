@@ -49,7 +49,7 @@ Stop the app with Ctrl+C in its terminal. After changing the code, restart it.
 python app.py --hosted --planners planners
 ```
 
-serves the online version: a home page at `/` with **Start my planner** (a blank planner at its own private link, `/p/<id>/`; bookmark it), **Open the demo** (`/p/demo/`, shared by everyone, with **Reset demo** to wipe it back to the first screen) and a link to the code. A new planner first asks for the semester's name and dates; study slots start at 08:00-13:00, 14:00-19:00 and 20:00-23:00 every day, at most 6 h a day, all changeable in Settings. Each planner is a folder under `planners/`; nothing there touches `data/`.
+serves the online version: a home page at `/` with **Start my planner** (a blank planner at its own private link, `/p/<id>/`; bookmark it) and a link to the code. A new planner first asks for the semester's name and dates; study slots start at 08:00-13:00, 14:00-19:00 and 20:00-23:00 every day, at most 6 h a day, all changeable in Settings. Each planner is a folder under `planners/`; nothing there touches `data/`.
 
 **Putting it online** (Render's free plan): the site builds from the public repo (github.com/arcyadav/headstart-public) with the `Dockerfile`. Its environment variables: `HEADSTART_DATASET` (a private Hugging Face dataset, e.g. `Arcyadav/headstart-planners`, that keeps the planners, since a free Render server forgets its files when it restarts; changes are saved there every 2 minutes), `HF_TOKEN` (a Hugging Face token that can write to it) and `PUBLISH_TOKEN` (any long secret, also kept in `.publish.json` for publish.py). A free Render server sleeps after 15 minutes without visitors; the next visit takes about a minute to wake it.
 

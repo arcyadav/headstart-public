@@ -199,10 +199,7 @@
   .avail .f input { width: 100%; padding: 4px; font-size: 12px; }
   .avail .fl { font-size: 11px; color: var(--muted); padding-top: 10px; }
 
-  /* hosted: demo bar, first-run guide */
-  .demobar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 20px;
-             background: color-mix(in srgb, var(--warn) 14%, var(--panel)); border-bottom: 1px solid var(--line); }
-  .demobar a { color: var(--accent); }
+  /* hosted: first-run guide */
   .guide { margin-bottom: 16px; border-color: var(--accent); }
   .guide h2 { margin: 0 0 8px; }
   .guide ol { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 8px; }
@@ -226,11 +223,6 @@
   <button id="btn-replan" title="Re-plan from the current time">Re-plan</button>
   <button id="btn-guide" title="How to set up your planner">Guide</button>
 </header>
-<div class="demobar hidden" id="demo-bar">
-  <span>This is the shared demo: anyone with the link can see and change it.</span>
-  <button id="btn-reset">Reset demo</button>
-  <a href="/">Start your own planner</a>
-</div>
 
 <main>
   <!-- WEEK VIEW -->
@@ -1664,7 +1656,7 @@ function render() {
   renderHosted();
 }
 
-// ------------------------------------------------------------------ first screen, guide, demo
+// ------------------------------------------------------------------ first screen, guide
 // The guide shows on a hosted planner until "Got it", remembered per planner in this browser.
 const GUIDE_KEY = `guide-hidden:${location.pathname}`;
 const guideHidden = () => { try { return localStorage.getItem(GUIDE_KEY) === "1"; } catch { return false; } };
@@ -1674,7 +1666,6 @@ function showGuide(on) {
 }
 function renderHosted() {
   $("nav-home").classList.toggle("hidden", !PLAN.hosted);
-  $("demo-bar").classList.toggle("hidden", !PLAN.demo);
   if (PLAN.needs_setup) {
     $("setup-modal").classList.add("open");
     $("guide").classList.add("hidden");
@@ -1690,12 +1681,6 @@ $("su-save").onclick = async () => {
   await refresh("/api/semester", body, "Setting up your planner...");
   if (PLAN.needs_setup) return renderHosted();  // it failed: back to the first screen
   showGuide(true); showView("week");
-};
-$("btn-reset").onclick = async () => {
-  if (!confirm("Reset the demo? Everything in it is wiped and it starts again from the first screen.")) return;
-  try { localStorage.removeItem(GUIDE_KEY); } catch {}
-  await refresh("/api/reset", {}, "Resetting the demo...");
-  showView("week");
 };
 $("btn-guide").onclick = () => { showView("week"); showGuide(true); };
 $("guide-close").onclick = () => showGuide(false);

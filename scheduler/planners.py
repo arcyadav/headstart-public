@@ -1,7 +1,6 @@
 """Separate planners for the hosted site: each lives in its own folder (setup.json,
 progress.json, plan.json, plan.txt) under the planners directory, named by its id. The
-id in the link is the only key, so it is long enough not to be guessed. "demo" is the
-shared try-it-yourself planner.
+id in the link is the only key, so it is long enough not to be guessed.
 """
 
 from __future__ import annotations
@@ -15,7 +14,6 @@ from pathlib import Path
 
 from . import setup_file
 
-DEMO = "demo"
 ID = re.compile(r"^[a-z0-9]{4,32}$")
 FILES = ("setup.json", "progress.json", "plan.json", "plan.txt")
 
@@ -37,16 +35,11 @@ def starter(now: datetime | None = None) -> dict:
 
 
 def folder(root: str | Path, planner_id: str) -> Path | None:
-    """The planner's folder, or None if the id is malformed or unknown. The demo is made
-    on first use."""
+    """The planner's folder, or None if the id is malformed or unknown."""
     if not ID.match(planner_id or ""):
         return None
     d = Path(root) / planner_id
-    if not d.is_dir():
-        if planner_id != DEMO:
-            return None
-        reset(root, DEMO)
-    return d
+    return d if d.is_dir() else None
 
 
 def paths(d: Path) -> dict[str, str]:

@@ -119,10 +119,9 @@ def _payload(inp: ScheduleInput, plan: Plan) -> dict:
         "weekly": weekly_status(inp, plan),
         "problems": problems(inp, plan),
         "today": today(inp, read_log(_path("progress"))),
-        # A planner without a semester shows the first screen; the demo has a Reset button.
+        # A planner without a semester shows the first screen.
         "needs_setup": sem is None,
         "hosted": CONFIG["hosted"],
-        "demo": _planner() == planners.DEMO,
     }
 
 
@@ -217,23 +216,12 @@ def publish():
         return _error("not allowed", 403)
     body = request.get_json()
     pid = body.get("id", "")
-    if not planners.ID.match(pid) or pid == planners.DEMO:
+    if not planners.ID.match(pid):
         return _error("bad planner id")
     with LOCK:
         d = planners.publish(CONFIG["planners"], pid, body["setup"], body["progress"])
         CACHE.pop(planners.paths(d)["input"], None)
     return jsonify({"url": f"/p/{pid}/"})
-
-
-@app.post("/api/reset")
-def reset_demo():
-    """The demo only: wipe it back to the blank first screen."""
-    if _planner() != planners.DEMO:
-        return _error("only the demo can be reset")
-    with LOCK:
-        planners.reset(CONFIG["planners"], planners.DEMO, _now())
-        CACHE.pop(_path("input"), None)
-    return jsonify(_replan(force=True))
 
 
 @app.post("/api/semester")
