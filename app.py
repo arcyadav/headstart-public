@@ -29,7 +29,7 @@ from scheduler.report import _reason, read_previous, deadline_status, next_sessi
 app = Flask(__name__, static_folder="static")
 # hosted: the online site, with a home page, the demo at /p/demo/ and published planners (see
 # scheduler/planners.py); otherwise the single planner in data/ on this computer.
-CONFIG = {"input": DEFAULT_INPUT, "progress": DEFAULT_PROGRESS, "now": None,
+CONFIG = {"input": DEFAULT_INPUT, "progress": DEFAULT_PROGRESS, "now": None, "lan": False, "port": 5000,
           "hosted": False, "planners": "planners"}
 LOCK = threading.Lock()  # one solve at a time
 CACHE: dict = {}  # setup file -> last plan
@@ -769,7 +769,6 @@ def subjects():
     Hobby areas are left out."""
     inp = _load()
     raw = {a["name"]: a for a in setup_file.read(_path("input"))["areas"]}
-    pace = {p["area"]: p for p in insights.pace(inp)["subjects"]}
     out = []
     for a in inp.areas:
         if a.kind.value == "hobby":
@@ -780,8 +779,6 @@ def subjects():
                           for wd, w in a.timetable],
             "class_changes": raw[a.name].get("timetable_changes", []),
             "lecture_items": a.lecture_items,
-            "pace": pace.get(a.name),
-            "usual": (pace.get(a.name) or {}).get("usual", {}),
             "weekly": [{"id": w.id, "title": w.title, "fixed": w.is_fixed,
                         "sessions_per_week": w.sessions_per_week, "session_min": w.session_min,
                         "weekly_min": w.weekly_min} for w in a.weekly],
@@ -807,29 +804,40 @@ def subjects():
 
 @app.get("/api/insights")
 def get_insights():
-    """For the Stats page: your pace, the effort put into each exam, and when you study
+    """For the Stats page: the effort put into each exam, and when you study
     (see scheduler/insights.py)."""
     inp = _load()
-    return jsonify({"pace": insights.pace(inp), "exams": insights.exam_effort(inp),
+    return jsonify({"exams": insights.exam_effort(inp),
                     "times": insights.study_times(inp, read_log(_path("progress")))})
 
 
-@app.post("/api/pace")
-def use_pace():
-    """Use a new lecture estimate for a subject's classes still to come: {area,
-    lecture_hr}. Lectures of classes already held keep the time they were planned with."""
-    body = request.get_json()
+def _lan_ip() -> str | None:
+    """This computer's address on its Wi-Fi or wired network, e.g. 192.168.1.5. Nothing
+    is sent: connecting a UDP socket only picks the outgoing interface."""
+    import socket
     try:
-        hours = float(body["lecture_hr"])
-        if not 0 < hours <= 12:
-            raise ValueError
-    except (KeyError, TypeError, ValueError):
-        return _error("give the lecture time in hours, more than 0")
-    inp = _load()
-    today_ = inp.now.date()
-    held = sorted({i.lecture_date.isoformat() for i in inp.items
-                   if i.area == body.get("area") and i.lecture_date and i.lecture_date <= today_})
-    return _change_setup(lambda data: setup_file.set_lecture_estimate(data, body["area"], hours, held))
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sk:
+            sk.connect(("10.255.255.255", 1))
+            ip = sk.getsockname()[0]
+        return None if ip.startswith("127.") else ip
+    except OSError:
+        return None
+
+
+@app.get("/api/phone")
+def phone():
+    """The link (and its QR code, as SVG) to open this planner on a phone on the same
+    network. Only when the app runs with --lan."""
+    ip = _lan_ip() if CONFIG["lan"] and not CONFIG["hosted"] else None
+    if not ip:
+        return jsonify({"url": None, "lan": CONFIG["lan"]})
+    import io
+    import qrcode
+    import qrcode.image.svg
+    url = f"http://{ip}:{CONFIG['port']}/"
+    buf = io.BytesIO()
+    qrcode.make(url, image_factory=qrcode.image.svg.SvgPathImage, box_size=8, border=2).save(buf)
+    return jsonify({"url": url, "lan": True, "qr": buf.getvalue().decode()})
 
 
 @app.get("/api/stats")
@@ -864,11 +872,13 @@ def main() -> None:
     ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 5000)))
     ap.add_argument("--hosted", action="store_true", default=bool(os.environ.get("HEADSTART_HOSTED")),
                     help="the online site: home page and separate planners under /p/<id>/")
+    ap.add_argument("--lan", action="store_true",
+                    help="also serve on this computer's network, to open it on a phone on the same Wi-Fi")
     ap.add_argument("--planners", default=os.environ.get("HEADSTART_PLANNERS", "planners"),
                     help="folder holding the hosted planners")
     args = ap.parse_args()
     CONFIG.update(input=args.input, progress=args.progress, now=args.now,
-                  hosted=args.hosted, planners=args.planners)
+                  hosted=args.hosted, planners=args.planners, lan=args.lan, port=args.port)
     if args.hosted:
         Path(args.planners).mkdir(parents=True, exist_ok=True)
         dataset = os.environ.get("HEADSTART_DATASET")
@@ -889,7 +899,11 @@ def main() -> None:
         Path(args.progress).write_text("[]\n", encoding="utf-8")
     threading.Thread(target=_replan, daemon=True).start()  # warm up the first plan
     print(f"HeadStart: open http://localhost:{args.port}")
-    app.run(port=args.port, debug=False, threaded=True)
+    if args.lan:
+        ip = _lan_ip()
+        print(f"HeadStart: on your phone (same Wi-Fi): http://{ip}:{args.port}" if ip
+              else "HeadStart: no network found for --lan; only this computer can open it")
+    app.run(host="0.0.0.0" if args.lan else "127.0.0.1", port=args.port, debug=False, threaded=True)
 
 
 if __name__ == "__main__":

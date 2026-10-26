@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HeadStart</title>
+<!-- "Add to Home screen" on a phone: name, icon, opens like an app -->
+<link rel="manifest" href="static/manifest.webmanifest">
+<link rel="icon" href="static/icons/icon-192.png">
+<link rel="apple-touch-icon" href="static/icons/icon-192.png">
+<meta name="theme-color" content="#2563eb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="HeadStart">
 <style>
   :root {
     --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #6b7280; --line: #e5e7eb;
@@ -188,8 +196,6 @@
   .insights { display: grid; gap: 16px; margin-top: 16px; }
   .insights .ih { margin: 0; font-size: 15px; }
   .inote { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
-  .pace td, .pace th { padding: 6px 8px; vertical-align: top; }
-  .pace .sub { display: block; }
   .xbar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--bg); margin: 4px 0 2px; }
   .xbar div { height: 100%; }
   .k-study { background: var(--accent); } .k-assignment { background: var(--warn); }
@@ -228,6 +234,25 @@
   .guide ol { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 8px; }
   .guide .actions { justify-content: flex-start; flex-wrap: wrap; }
   header a.home { color: var(--muted); text-decoration: none; }
+
+  /* phone: one day at a time, the header scrolls sideways */
+  .grid.one { grid-template-columns: 44px 1fr; }
+  .grid.one .col { min-width: 0; }
+  @media (max-width: 700px) {
+    header { padding: 8px 10px; gap: 6px; flex-wrap: nowrap; overflow-x: auto; }
+    header .clock { display: none; }
+    header button, header a.home { flex: 0 0 auto; padding: 6px 9px; }
+    main { padding: 10px; }
+    .card { padding: 12px; }
+    .weekbar { margin: -12px -12px 10px; padding: 10px 12px 8px; }
+    .weekbar .range { min-width: 0; flex: 1; }
+    .now { gap: 10px; flex-wrap: wrap; }
+    .now .grow { flex: 1 1 calc(100% - 40px); }  /* the title gets its own row */
+    .now .title { font-size: 16px; }
+    .modal { width: 96vw; max-height: 92vh; overflow-y: auto; }
+    .demobar { padding: 8px 10px; }
+    .toolbar { flex-wrap: wrap; }
+  }
 </style>
 </head>
 <body>
@@ -326,11 +351,6 @@
     </div>
     <div class="insights">
       <div class="card">
-        <h2 class="ih">Your pace</h2>
-        <div class="inote">How long things really take you, from work you finished. Since you started tracking.</div>
-        <div id="ins-pace"></div>
-      </div>
-      <div class="card">
         <h2 class="ih">Exam effort</h2>
         <div class="inote">Hours logged on everything that counts toward each exam.</div>
         <div id="ins-exams"></div>
@@ -384,6 +404,10 @@
       <div class="actions" style="justify-content:flex-start">
         <button id="st-save" class="primary">Save and re-plan</button>
         <button id="st-reset">Discard changes</button>
+      </div>
+      <div class="card hidden" id="st-phone">
+        <h2>Use it on your phone</h2>
+        <div id="st-phone-body"></div>
       </div>
     </div>
   </section>
@@ -528,8 +552,7 @@
     </div>
     <div class="field"><label>Type</label><select id="tm-type"><option value="study">Study: a chapter, topic, lecture or notes</option><option value="assignment">Assignment: problem set, lab, homework</option><option value="other">Other: project or anything else</option></select></div>
     <div class="field"><label>Title</label><input id="tm-title" placeholder="e.g. Assignment 7, 5C, Dynamic programming"></div>
-    <div class="field"><label>Time needed</label><input id="tm-hours" class="dur" placeholder="e.g. 50m or 1h 30m" value="2h">
-      <div class="timehint" id="tm-usual" style="margin:2px 0 0"></div></div>
+    <div class="field"><label>Time needed</label><input id="tm-hours" class="dur" placeholder="e.g. 50m or 1h 30m" value="2h"></div>
     <div class="radios">
       <label><input type="radio" name="tm-kind" value="due" checked> Due date</label>
       <label><input type="radio" name="tm-kind" value="exam"> For an exam</label>
@@ -766,12 +789,22 @@ function renderNow() {
 const sessionArea = (n) => (PLAN.sessions.find((x) => x.id === n.id) || {}).area;
 
 // ------------------------------------------------------------------ week grid
+// On a phone the week view shows one day (phoneDay); the side panels follow its week.
+const PHONE = window.matchMedia("(max-width: 700px)");
+let phoneDay = null;
+const dayStart = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
 function renderWeek() {
   const grid = $("grid"), start = toMin(PLAN.day_start), end = toMin(PLAN.day_end);
-  const height = (end - start) * 0.9, now = new Date(PLAN.now);
-  const days = [...Array(7)].map((_, i) => { const d = new Date(weekStart); d.setDate(d.getDate() + i); return d; });
-  const last = days[6];
-  $("range").textContent = `${days[0].getDate()} ${MONTHS[days[0].getMonth()]} - ${last.getDate()} ${MONTHS[last.getMonth()]}`;
+  const height = (end - start) * 0.9, now = new Date(PLAN.now), one = PHONE.matches;
+  if (one && !phoneDay) phoneDay = dayStart(now);
+  if (one) weekStart = monday(phoneDay);
+  const days = one ? [new Date(phoneDay)]
+    : [...Array(7)].map((_, i) => { const d = new Date(weekStart); d.setDate(d.getDate() + i); return d; });
+  const last = days[days.length - 1];
+  grid.classList.toggle("one", one);
+  $("today").textContent = one ? "Today" : "This week";
+  $("range").textContent = one ? niceDate(days[0])
+    : `${days[0].getDate()} ${MONTHS[days[0].getMonth()]} - ${last.getDate()} ${MONTHS[last.getMonth()]}`;
   const y = (min) => (min - start) * 0.9;
 
   let html = `<div></div>`;
@@ -1244,7 +1277,7 @@ async function openAddTask(area) {
   if (area) sel.value = area;
   $("tm-new-name").value = "";
   $("tm-type").value = "study";
-  hoursTyped = false;
+  $("tm-hours").value = "2h";
   fillExams();
   $("tm-title").value = "";
   $("task-modal").classList.add("open");
@@ -1256,20 +1289,7 @@ function fillExams() {
   const exams = subj ? subj.milestones.filter((m) => new Date(m.at) > new Date(PLAN.now)) : [];
   $("tm-exam").innerHTML = exams.map((m) => `<option value="${esc(m.id)}">${esc(m.title)} (${niceDate(new Date(m.at))})</option>`).join("")
     || `<option value="">No upcoming exams</option>`;
-  fillUsual();
 }
-// Time needed starts at your usual time for that type in that subject (once 3 or more are
-// finished, see Stats > Your pace), unless you've typed your own.
-const TYPE_NAMES = { study: "study tasks and lectures", assignment: "assignments", other: "other tasks" };
-let hoursTyped = false;
-function fillUsual() {
-  const subj = (SUBJECTS || []).find((s) => s.name === $("tm-area").value);
-  const type = $("tm-type").value, u = subj && subj.usual && subj.usual[type];
-  if (!hoursTyped) $("tm-hours").value = u ? fmtDur(u.min / 60) : "2h";
-  $("tm-usual").textContent = u ? `Your usual for ${subj.name} ${TYPE_NAMES[type]}: ${hm(u.min)} (from ${u.n} finished).` : "";
-}
-$("tm-hours").oninput = () => { hoursTyped = true; };
-$("tm-type").onchange = fillUsual;
 $("tm-area").onchange = fillExams;
 document.querySelectorAll('input[name="tm-kind"]').forEach((r) => (r.onchange = () => {
   const kind = document.querySelector('input[name="tm-kind"]:checked').value;
@@ -1382,8 +1402,6 @@ async function renderSubjects() {
       <div class="sub" style="color:var(--muted);margin-top:6px">Click a class on the week view to cancel or move just that one.</div>
       <label class="sub" style="display:block;margin:6px 0"><input type="checkbox" id="subj-lectures" ${subj.lecture_items ? "checked" : ""}>
         Add a lecture to study after each class</label>
-      ${subj.pace && subj.pace.lecture ? `<div class="sub" style="color:var(--muted)">Your pace: lectures take you about
-        ${hm(subj.pace.lecture.actual_min)} (you plan ${hm(subj.pace.lecture.current_min)}), from ${subj.pace.lecture.n} finished. See Stats.</div>` : ""}
       ${subj.class_changes.map((c, n) => {
         const d = (x) => niceDate(new Date(`${x}T00:00`));
         const what = c.cancel ? `Cancelled ${d(c.cancel)}` : c.move ? `Moved ${d(c.move)} → ${d(c.to[0])} ${c.to[1]}-${c.to[2]}` : `Extra class ${d(c.extra[0])} ${c.extra[1]}-${c.extra[2]}`;
@@ -1542,7 +1560,29 @@ const WEEK_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const CELL = 30, CELLS = 24 * 60 / CELL;  // the grid is in half hours
 let AVAIL = {}, painting = null;
 
+async function renderPhone() {  // the laptop version only: how to open it on a phone
+  if (PLAN.hosted) return $("st-phone").classList.add("hidden");
+  let ph;
+  try { ph = await api("/api/phone", null, "Loading..."); } catch { return; }
+  $("st-phone").classList.remove("hidden");
+  $("st-phone-body").innerHTML = !ph.url
+    ? `<div class="sub" style="color:var(--muted)">Start HeadStart with the <b>HeadStart</b> desktop shortcut (or <code>python app.py --lan</code>)
+        and connect this computer to Wi-Fi; this card then shows a link and a QR code for your phone.</div>`
+    : `<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+        <div style="background:#fff;padding:6px;border-radius:8px;width:180px;line-height:0">${ph.qr.replace(/<\?xml[^>]*>/, "").replace("<svg", '<svg style="width:100%;height:auto"')}</div>
+        <div style="flex:1;min-width:220px">
+          <ol style="margin:0 0 8px;padding-left:18px;display:grid;gap:6px">
+            <li>Connect your phone to the <b>same Wi-Fi</b> as this computer.</li>
+            <li>Scan the code with the phone's camera, or type <b>${esc(ph.url)}</b> in its browser.</li>
+            <li>In the browser menu, choose <b>Add to Home screen</b> for a HeadStart icon.</li>
+          </ol>
+          <div class="sub" style="color:var(--muted)">It's this same planner: whatever you do on the phone is saved here.
+            It works while this computer is on and HeadStart is running. Anyone on the same Wi-Fi with this address can open it,
+            so use it on your home Wi-Fi. If the phone can't connect, allow HeadStart (Python) through Windows Firewall on private networks.</div>
+        </div></div>`;
+}
 async function renderSettings() {
+  renderPhone();
   const s = await api("/api/settings", null, "Loading...");
   $("st-name").value = s.semester.name || "";
   $("st-start").value = s.semester.start || "";
@@ -1718,37 +1758,11 @@ async function renderStats(reload) {
   }).join("");
 }
 // ------------------------------------------------------------------ insights (Stats page)
-// Pace, exam effort and study times, from everything logged since tracking began.
+// Exam effort and study times, from everything logged since tracking began.
 async function renderInsights() {
   let ins;
   try { ins = await api("/api/insights", null, "Loading..."); }
   catch (e) { return; }
-  const ratio = (r) => r ? `<b>×${r.ratio.toFixed(2)}</b><span class="sub">${r.n} done · ${r.ratio > 1.1 ? "longer than you plan" : r.ratio < 0.9 ? "quicker than you plan" : "about as planned"}</span>` : `<span class="sub">-</span>`;
-  // Lectures from classes count with study; their per-subject estimate can be updated.
-  const lec = (s) => {
-    const l = s.lecture;
-    if (!l) return "";
-    const btn = l.suggest_min ? `<button class="linkbtn" style="margin:4px 0 0" data-pace="${esc(s.area)}" data-min="${l.suggest_min}">Use ${hm(l.suggest_min)} for future lectures</button>`
-      : l.n >= 2 ? `<span class="sub ok">✓ lecture estimate about right</span>` : "";
-    return `<span class="sub" style="margin-top:4px">class lectures: plan ${hm(l.current_min)} → take <b>${hm(l.actual_min)}</b></span>${btn}`;
-  };
-  const p = ins.pace;
-  $("ins-pace").innerHTML = !p.subjects.length ? `<div class="sub">Not enough data yet: finish a few tasks and log their sessions.</div>` :
-    `<table class="pace"><thead><tr><th>Subject</th><th>Lectures &amp; study</th><th>Assignments</th><th>Other</th><th>Revision</th></tr></thead><tbody>` +
-    p.subjects.map((s) => `<tr><td><span class="dot" style="background:${color(s.area)}"></span>${esc(s.area)}</td>
-      <td>${ratio(s.study)}${lec(s)}</td><td>${ratio(s.assignment)}</td><td>${ratio(s.other)}</td><td>${ratio(s.revision)}</td></tr>`).join("") + `</tbody></table>
-    <div class="inote" style="margin:8px 0 0">×1.33 means it took a third longer than you estimated.` +
-    (p.left_out.length ? ` Left out: ${p.left_out.length} item${p.left_out.length > 1 ? "s" : ""} marked done with little time logged
-      (${p.left_out.map((x) => esc(x.title.includes(x.area) ? x.title : `${x.area} ${x.title}`)).join(", ")}): covered elsewhere, e.g. in revision.` : "") + `</div>`;
-  $("ins-pace").querySelectorAll("[data-pace]").forEach((b) => (b.onclick = async () => {
-    const area = b.dataset.pace, min = +b.dataset.min;
-    if (!confirm(`Plan ${hm(min)} for each ${area} lecture from now on? Lectures of classes already held keep their time.`)) return;
-    const before = PLAN;
-    await refresh("/api/pace", { area, lecture_hr: min / 60 });
-    if (PLAN !== before) toast(`${area} lectures now planned at ${hm(min)}.`);
-    showView("stats");
-  }));
-
   const kinds = [["study", "lectures & study"], ["assignment", "assignments"], ["other", "other"], ["revision", "revision"]];
   const top = Math.max(60, ...ins.exams.map((e) => e.total_min));
   $("ins-exams").innerHTML = !ins.exams.length ? `<div class="sub">No exams yet: add them on a subject's page.</div>` :
@@ -1849,9 +1863,15 @@ function closeModals() {  // the first screen stays until the semester is set
 document.querySelectorAll("[data-close]").forEach((b) => (b.onclick = closeModals));
 document.querySelectorAll(".backdrop").forEach((m) => (m.onclick = (e) => { if (e.target === m) closeModals(); }));
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModals(); });
-$("prev").onclick = () => { weekStart.setDate(weekStart.getDate() - 7); renderWeek(); };
-$("next").onclick = () => { weekStart.setDate(weekStart.getDate() + 7); renderWeek(); };
-$("today").onclick = () => { weekStart = monday(new Date(PLAN.now)); renderWeek(); };
+function moveWeek(dir) {  // a day at a time on a phone, else a week
+  if (PHONE.matches) { phoneDay = dayStart(phoneDay || PLAN.now); phoneDay.setDate(phoneDay.getDate() + dir); }
+  else weekStart.setDate(weekStart.getDate() + 7 * dir);
+  renderWeek();
+}
+$("prev").onclick = () => moveWeek(-1);
+$("next").onclick = () => moveWeek(1);
+$("today").onclick = () => { phoneDay = dayStart(PLAN.now); weekStart = monday(new Date(PLAN.now)); renderWeek(); };
+PHONE.addEventListener("change", () => { phoneDay = null; if (PLAN) renderWeek(); });
 $("nav-week").onclick = () => showView("week");
 $("nav-month").onclick = () => showView("month");
 $("mprev").onclick = () => { monthStart.setDate(monthStart.getDate() - 28); renderMonth(); };

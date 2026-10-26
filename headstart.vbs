@@ -1,6 +1,7 @@
 ' HeadStart launcher: (re)starts the server in the background and opens the
 ' browser. No terminal window. A server already running is stopped first, so
-' clicking the launcher always runs the latest code.
+' clicking the launcher always runs the latest code. --lan lets a phone on the same
+' Wi-Fi open it too (Settings shows the link).
 Option Explicit
 Dim sh, fso, dir, url, i
 Set sh = CreateObject("WScript.Shell")
@@ -31,7 +32,7 @@ End If
 If Not IsUp() Then
     If Not fso.FolderExists(dir & "\out") Then fso.CreateFolder dir & "\out"
     sh.CurrentDirectory = dir
-    sh.Run "cmd /c "".venv\Scripts\python.exe"" app.py > out\server.log 2>&1", 0, False
+    sh.Run "cmd /c "".venv\Scripts\python.exe"" app.py --lan > out\server.log 2>&1", 0, False
     For i = 1 To 40
         WScript.Sleep 500
         If IsUp() Then Exit For
