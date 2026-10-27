@@ -512,6 +512,7 @@
       <input id="em-rev" class="dur" placeholder="e.g. 50m or 1h 30m" value="6h"></div>
     <div class="field"><label>Syllabus ends with lectures up to (optional)</label><input id="em-syl" type="date"></div>
     <div class="actions">
+      <button id="em-delete" class="hidden" style="margin-right:auto;color:var(--bad)">Delete exam</button>
       <button data-close>Cancel</button>
       <button id="em-save" class="primary">Add and re-plan</button>
     </div>
@@ -1326,6 +1327,7 @@ function openAddExam(area) {
   $("em-title").value = `${area} `;
   $("em-rev").value = "6h";
   $("em-save").textContent = "Add and re-plan";
+  $("em-delete").classList.add("hidden");
   $("exam-modal").classList.add("open");
   $("em-title").focus();
 }
@@ -1345,9 +1347,21 @@ function openEditExam(area, id) {
   $("em-start").value = m.start || ""; $("em-end").value = m.end || "";
   $("em-syl").value = m.syllabus_until || "";
   $("em-save").textContent = "Save and re-plan";
+  $("em-delete").classList.remove("hidden");
+  $("em-delete").textContent = m.quiz ? "Delete quiz" : "Delete exam";
   $("exam-modal").classList.add("open");
   $("em-title").focus();
 }
+$("em-delete").onclick = async () => {
+  const m = SUBJECTS.find((s) => s.name === examArea).milestones.find((x) => x.id === examId);
+  if (!confirm(`Delete ${m.title}? Its revision goes too. Lectures that counted toward it count toward the next exam; ` +
+               "tasks linked to it keep their own due date, or have none.")) return;
+  closeModals();
+  const before = PLAN;
+  await refresh("/api/exams/delete", { area: examArea, id: examId });
+  if (PLAN !== before) toast(`${m.title} deleted.`);
+  showView("subjects");
+};
 $("em-save").onclick = async () => {
   const body = { area: examArea, title: $("em-title").value.trim(), date: $("em-date").value,
                  start: $("em-start").value, end: $("em-end").value, syllabus_until: $("em-syl").value };

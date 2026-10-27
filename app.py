@@ -408,6 +408,14 @@ def edit_exam():
     return _change_setup(change)
 
 
+@app.post("/api/exams/delete")
+def delete_exam():
+    """Remove an exam: {area, id}. See setup_file.delete_milestone for what happens to
+    the work that counted toward it."""
+    body = request.get_json()
+    return _change_setup(lambda data: setup_file.delete_milestone(data, body["area"], body["id"]))
+
+
 @app.post("/api/edit")
 def edit_task():
     """Change a task: {id, title?, left_hr?, deadline: "due"|"exam"|"none", due?,

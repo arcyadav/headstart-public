@@ -425,3 +425,23 @@ def remove_weekly_class(data: dict, area: str, day: str, start: str) -> None:
                 del a["timetable"]
             return
     raise ValueError(f"no {area} class on {day.title()} at {start}")
+
+
+def delete_milestone(data: dict, area: str, milestone_id: str) -> None:
+    """Remove an exam. Tasks that counted toward it keep everything but that link (a task
+    without its own due date then has no deadline); lecture overrides pointing to it go,
+    so those lectures count toward the next exam like any other. Its revision goes with
+    it; logged revision sessions stay in the log, unused."""
+    milestone(data, area, milestone_id)  # it exists (and has its id written in)
+    a, _ = _changes(data, area)
+    _tidy_changes(a)
+    a["milestones"] = [m for m in a["milestones"] if m.get("id") != milestone_id]
+    if not a["milestones"]:
+        del a["milestones"]
+    for item in a.get("items", []):
+        if item.get("counts_toward") == milestone_id:
+            del item["counts_toward"]
+    for o in a.get("lecture_overrides", {}).values():
+        if o.get("counts_toward") == milestone_id:
+            del o["counts_toward"]
+    tidy_overrides(data)
