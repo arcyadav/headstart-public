@@ -53,7 +53,7 @@ CMO      Mon 11:00–12:00, Wed 11:00–12:00
 DAA Lab  Fri 14:00–17:00
 ```
 
-- It holds every week until the timetable is changed (the semester dates don't limit it yet).
+- It holds every week until the **last day of classes** (`semester.classes_end`, set in Settings, optional, within the semester). After that date weekly classes stop: they block no time and create no lecture items. Exams, revision and tasks go on, and one-off extra classes still count, since they are added on purpose.
 - **One-time changes** don't touch the weekly pattern:
   - **Cancel:** one class on a date (holiday, prof absent). It blocks no time and creates no lecture item.
   - **Extra:** a one-off class on a date and time (makeup lecture). It blocks that time and creates a lecture item like any other class.

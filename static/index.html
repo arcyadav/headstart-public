@@ -376,7 +376,10 @@
           <div class="field" style="flex:1"><label>Starts</label><input id="st-start" type="date"></div>
           <div class="field" style="flex:1"><label>Ends</label><input id="st-end" type="date"></div>
         </div>
-        <div class="sub" style="color:var(--muted)">Shown at the top as the week of the semester.</div>
+        <div class="field"><label>Last day of classes (optional)</label><input id="st-classes-end" type="date"></div>
+        <div class="sub" style="color:var(--muted)">The dates are shown at the top as the week of the semester. After the last
+          day of classes, weekly classes stop: they no longer block time or add lectures. Exams, revision and tasks go on
+          as usual, and an extra class you add after it still counts.</div>
       </div>
       <div class="card">
         <h2>When you can study</h2>
@@ -1601,6 +1604,7 @@ async function renderSettings() {
   $("st-name").value = s.semester.name || "";
   $("st-start").value = s.semester.start || "";
   $("st-end").value = s.semester.end || "";
+  $("st-classes-end").value = s.semester.classes_end || "";
   // A cell is free if a slot covers all of it.
   for (const d of WEEK_DAYS) {
     AVAIL[d] = [...Array(CELLS)].map((_, i) =>
@@ -1682,11 +1686,14 @@ $("st-save").onclick = async () => {
   }
   if (WEEK_DAYS.every((d) => !AVAIL[d].some(Boolean))) return toast("Mark at least some time when you can study.");
   const availability = Object.fromEntries(WEEK_DAYS.map((d) => [d, slotsOf(AVAIL[d])]));
-  const body = { semester: { name: $("st-name").value.trim(), start: $("st-start").value, end: $("st-end").value },
+  const body = { semester: { name: $("st-name").value.trim(), start: $("st-start").value, end: $("st-end").value,
+                             classes_end: $("st-classes-end").value },
                  availability, week, min_session_min: +$("st-smin").value, max_session_min: +$("st-smax").value };
   const sem = body.semester;
   if ((sem.start || sem.end) && !(sem.start && sem.end)) return toast("Give the semester both a start and an end.");
   if (sem.start && sem.end <= sem.start) return toast("The semester must end after it starts.");
+  if (sem.classes_end && ((sem.start && sem.classes_end < sem.start) || (sem.end && sem.classes_end > sem.end)))
+    return toast("The last day of classes must be within the semester.");
   if (body.min_session_min > body.max_session_min) return toast("The shortest session can't be longer than the longest.");
   const before = PLAN;
   await refresh("/api/settings", body);

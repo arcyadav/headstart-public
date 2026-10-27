@@ -130,9 +130,12 @@ def _parse_semester(raw: dict | None) -> Semester | None:
         name=raw.get("name") or "Semester",
         start=_date(raw["start"], "semester start") if raw.get("start") else None,
         end=_date(raw["end"], "semester end") if raw.get("end") else None,
+        classes_end=_date(raw["classes_end"], "last day of classes") if raw.get("classes_end") else None,
     )
     if sem.start and sem.end and sem.end <= sem.start:
         raise InputError("semester: the end must be after the start")
+    if sem.classes_end and ((sem.start and sem.classes_end < sem.start) or (sem.end and sem.classes_end > sem.end)):
+        raise InputError("semester: the last day of classes must be within the semester")
     return sem
 
 
@@ -401,6 +404,8 @@ def load_input(path: str | Path, now: datetime | None = None,
         areas=[_parse_area(a) for a in raw.get("areas", [])],
         settings=_parse_settings(raw["settings"]),
     )
+    for area in inp.areas:  # weekly classes stop after the semester's last day of classes
+        area.classes_until = inp.semester.classes_end if inp.semester else None
     for area in inp.areas:  # same rule as setup_file.write, which saves them
         if not area.color:
             area.color = next_color([a.color for a in inp.areas if a.color])

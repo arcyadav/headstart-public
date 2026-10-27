@@ -208,6 +208,7 @@ class Area:
     timetable: list[tuple[str, Window]] = field(default_factory=list)
     cancelled: set[date] = field(default_factory=set)
     extra: list[tuple[date, Window]] = field(default_factory=list)
+    classes_until: date | None = None  # the semester's last day of classes: no weekly class after it
     lecture_items: bool = False
     lecture_estimate_min: int = DEFAULT_ESTIMATE_MIN
     pending_lectures: list[date] = field(default_factory=list)
@@ -224,8 +225,9 @@ class Area:
 
     def classes_on(self, day: date) -> list[Window]:
         """This area's classes on a date, after one-time changes. An exam held in a class
-        slot replaces that class."""
-        out = [] if day in self.cancelled else [w for wd, w in self.timetable if wd == weekday(day)]
+        slot replaces that class. After the last day of classes only extra classes are left."""
+        over = self.classes_until is not None and day > self.classes_until
+        out = [] if day in self.cancelled or over else [w for wd, w in self.timetable if wd == weekday(day)]
         out += [w for d, w in self.extra if d == day]
         exams = self.exams_on(day)
         out = [w for w in out if not any(w.on(day)[0] < m.end and m.at < w.on(day)[1] for m in exams)]
@@ -263,6 +265,7 @@ class Semester:
     name: str
     start: date | None = None
     end: date | None = None
+    classes_end: date | None = None  # last day of classes; exams and study go on after it
 
     def week_of(self, day: date) -> tuple[int, int] | None:
         """(this week's number, number of weeks), counting the start's week as week 1."""
