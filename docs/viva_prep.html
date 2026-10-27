@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HeadStart Viva Prep</title>
+<meta name="description" content="Viva preparation guide for Project 2 (HeadStart): the project story, how the planner is modelled as an optimisation problem, the CP-SAT engine, design decisions, real-use results, deployment, limits, and likely viva questions with answers.">
+<style>
+  :root {
+    --surface: #fcfcfb; --card: #ffffff; --ink: #0b0b0b; --text: #2b2a27; --muted: #6f6d67;
+    --grid: #e1e0d9; --soft: #f3f2ee; --accent: #2a78d6; --accent-2: #eb6834; --accent-3: #1baf7a;
+    --tip: #eef4fc; --warn: #fdf1ea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --surface: #161614; --card: #1f1f1c; --ink: #f4f3ef; --text: #dcdad3; --muted: #a3a097;
+      --grid: #34332f; --soft: #262622; --accent: #6aa5ee; --accent-2: #f08a5d; --accent-3: #4cc799;
+      --tip: #1c2633; --warn: #2e221b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --surface: #161614; --card: #1f1f1c; --ink: #f4f3ef; --text: #dcdad3; --muted: #a3a097;
+    --grid: #34332f; --soft: #262622; --accent: #6aa5ee; --accent-2: #f08a5d; --accent-3: #4cc799;
+    --tip: #1c2633; --warn: #2e221b;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--surface); color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); max-width: 1220px; margin: 0 auto; }
+  aside { position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 28px 16px; border-right: 1px solid var(--grid); }
+  aside .brand { color: var(--ink); font-weight: 650; margin: 0 0 4px; }
+  aside .sub { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  aside ol { list-style: none; margin: 0; padding: 0; }
+  aside li a { display: block; padding: 6px 10px; border-radius: 6px; color: var(--text); text-decoration: none; font-size: 14px; }
+  aside li a:hover { background: var(--soft); color: var(--ink); }
+  main { padding: 40px 32px 80px; min-width: 0; }
+  h1 { color: var(--ink); font-size: clamp(28px, 4.5vw, 40px); line-height: 1.15; margin: 0 0 12px; letter-spacing: -.01em; }
+  h2 { color: var(--ink); font-size: 26px; margin: 0 0 12px; padding-top: 8px; letter-spacing: -.01em; }
+  h3 { color: var(--ink); font-size: 19px; margin: 28px 0 8px; }
+  h4 { color: var(--ink); font-size: 16px; margin: 18px 0 6px; }
+  section { padding: 40px 0 8px; border-bottom: 1px solid var(--grid); scroll-margin-top: 8px; }
+  .lede { font-size: 18px; max-width: 760px; }
+  .muted { color: var(--muted); }
+  a { color: var(--accent); }
+  .box { border: 1px solid var(--grid); border-radius: 10px; padding: 14px 18px; margin: 14px 0; background: var(--card); }
+  .box.tip { background: var(--tip); border-left: 4px solid var(--accent); }
+  .box.warn { background: var(--warn); border-left: 4px solid var(--accent-2); }
+  .box.key { border-left: 4px solid var(--accent-3); }
+  .box p:first-child { margin-top: 0; } .box p:last-child { margin-bottom: 0; }
+  .box strong { color: var(--ink); }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0; }
+  .stat { background: var(--card); border: 1px solid var(--grid); border-radius: 10px; padding: 12px 14px; }
+  .stat .num { color: var(--ink); font-size: 22px; font-weight: 650; line-height: 1.15; }
+  .stat .label { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+  .table-wrap { overflow-x: auto; margin: 12px 0; border: 1px solid var(--grid); border-radius: 10px; background: var(--card); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 560px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; background: var(--soft); }
+  tr:last-child td { border-bottom: none; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  code, .f { font: 13.5px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+  .formula { display: block; font: 14px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; background: var(--soft);
+    border-radius: 8px; padding: 10px 14px; margin: 8px 0; overflow-x: auto; white-space: pre; color: var(--ink); }
+  .test-card { background: var(--card); border: 1px solid var(--grid); border-radius: 12px; padding: 18px 20px; margin: 16px 0; }
+  .test-card h3 { margin-top: 0; }
+  .pill { display: inline-block; font-size: 12px; padding: 1px 9px; border-radius: 999px; background: var(--soft); color: var(--ink); margin-right: 4px; }
+  dl.facts { display: grid; grid-template-columns: 150px 1fr; gap: 6px 14px; margin: 10px 0; font-size: 15px; }
+  dl.facts dt { color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; padding-top: 2px; }
+  dl.facts dd { margin: 0; }
+  .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; font-size: 14px; }
+  .flow span.n { background: var(--card); border: 1px solid var(--grid); border-radius: 8px; padding: 6px 10px; color: var(--ink); }
+  .flow span.a { color: var(--muted); }
+  .qa-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 8px; }
+  button { background: var(--card); color: var(--ink); border: 1px solid var(--grid); border-radius: 999px;
+    padding: 6px 14px; font: inherit; font-size: 13px; cursor: pointer; }
+  button:hover { background: var(--soft); }
+  input[type="search"] { flex: 1 1 220px; min-width: 0; background: var(--card); color: var(--ink); border: 1px solid var(--grid);
+    border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 14px; }
+  .qgroup h3 { margin-top: 26px; }
+  details.qa { background: var(--card); border: 1px solid var(--grid); border-radius: 10px; margin: 8px 0; }
+  details.qa summary { cursor: pointer; padding: 11px 16px; color: var(--ink); font-weight: 600; list-style: none; }
+  details.qa summary::-webkit-details-marker { display: none; }
+  details.qa summary::before { content: "Q" counter(q) ". "; color: var(--accent); }
+  .qbank { counter-reset: q; }
+  details.qa { counter-increment: q; }
+  details.qa[open] summary { border-bottom: 1px solid var(--grid); }
+  details.qa .a { padding: 10px 16px 14px; }
+  details.qa .a p { margin: 6px 0; }
+  details.qa .a ul { margin: 6px 0; padding-left: 20px; }
+  .hidden { display: none !important; }
+  .theme-toggle { position: fixed; right: 16px; bottom: 16px; z-index: 10; }
+  @media (max-width: 880px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--grid); padding: 20px 16px; }
+    aside ol { display: flex; flex-wrap: wrap; gap: 2px; }
+    main { padding: 24px 16px 64px; }
+    dl.facts { grid-template-columns: 1fr; gap: 2px; }
+    dl.facts dd { margin-bottom: 8px; }
+  }
+  @media print {
+    aside, .qa-tools, .theme-toggle { display: none; }
+    .layout { display: block; }
+    details.qa .a { display: block !important; }
+  }
+</style>
+</head>
+<body>
+<button class="theme-toggle" id="theme" type="button">Toggle theme</button>
+<div class="layout">
+<aside>
+  <p class="brand">HeadStart viva prep</p>
+  <p class="sub">Project 2 · UMC301</p>
+  <ol>
+    <li><a href="#pitch">1. The project in 2 minutes</a></li>
+    <li><a href="#problem">2. Problem and goal</a></li>
+    <li><a href="#features">3. What it does</a></li>
+    <li><a href="#demo">4. Demo script</a></li>
+    <li><a href="#arch">5. Architecture</a></li>
+    <li><a href="#model">6. The maths: the model</a></li>
+    <li><a href="#cpsat">7. CP-SAT and optimisation</a></li>
+    <li><a href="#engine">8. The two-stage engine</a></li>
+    <li><a href="#decisions">9. Design decisions</a></li>
+    <li><a href="#results">10. Real use and results</a></li>
+    <li><a href="#deploy">11. Deployment and phone</a></li>
+    <li><a href="#limits">12. Limitations</a></li>
+    <li><a href="#questions">13. Viva questions</a></li>
+    <li><a href="#numbers">14. Numbers to remember</a></li>
+  </ol>
+</aside>
+
+<main>
+<header>
+  <h1>Viva preparation: HeadStart, a study planner for your semester</h1>
+  <p class="lede">Everything needed to explain and defend Project 2: what HeadStart does and why, how planning a
+    semester becomes an optimisation problem, how the CP-SAT engine solves it, the design decisions, what two weeks of
+    real use showed, and the questions an examiner is likely to ask, with answers.</p>
+  <p class="muted">Live site: <a href="https://headstart-1g49.onrender.com">headstart-1g49.onrender.com</a> ·
+    Code: <a href="https://github.com/arcyadav/headstart-public">github.com/arcyadav/headstart-public</a></p>
+</header>
+
+<!-- ============================================================ -->
+<section id="pitch">
+  <h2>1. The project in 2 minutes</h2>
+  <div class="box key">
+    <p><strong>Say this if asked "explain your project":</strong></p>
+    <p>"HeadStart is a study planner built for one semester of a student's life. You give it your subjects and
+      weekly timetable, your exams and assignments, and the times you're free to study. It then plans when to
+      study each thing, in sessions of sensible length with breaks, so that everything is finished before its
+      deadline, and it re-plans whenever you log a session, finish a task or a class is cancelled.</p>
+    <p>Under the hood, planning is an <strong>optimisation problem</strong>: thousands of 10-minute time slots, dozens of
+      tasks, deadlines, dependencies and daily limits. I solve it with Google's <strong>CP-SAT</strong> constraint solver in
+      two stages: first decide how many minutes of each task go on each day, then place those minutes into exact
+      time slots for each day.</p>
+    <p>I used it myself through two weeks of midsems. My CMO midsem went from <strong>16.5/40</strong> (below average) to
+      <strong>32/45</strong> (median 23). One student and one exam, so not proof, but my own logs show steady study
+      before that exam. What really helped wasn't the exact order of sessions, it was the <strong>workload
+      forecast</strong>: seeing how much each subject needs by when, which creates urgency early.</p>
+    <p>It's deployed as a demo site anyone can try, and for real use it runs on your own computer, including from
+      your phone over Wi-Fi, so your data never leaves your devices."</p>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="num">CP-SAT</div><div class="label">constraint solver, two stages</div></div>
+    <div class="stat"><div class="num">10 min</div><div class="label">time grid</div></div>
+    <div class="stat"><div class="num">~2,200</div><div class="label">variables, stage 1 (real semester)</div></div>
+    <div class="stat"><div class="num">~5 s</div><div class="label">full re-plan of 5 weeks</div></div>
+    <div class="stat"><div class="num">16.5→32</div><div class="label">CMO midsem (/40 → /45)</div></div>
+    <div class="stat"><div class="num">~5,700</div><div class="label">lines of Python + HTML/JS</div></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="problem">
+  <h2>2. Problem and goal</h2>
+  <h3>The problem</h3>
+  <p>Students want to study regularly but often fail to. They</p>
+  <ul>
+    <li>don't know how much time to give each task,</li>
+    <li>waste time making schedules instead of following them, or</li>
+    <li>give up when they miss a session, because the plan falls apart.</li>
+  </ul>
+  <p>And a semester's work never stops arriving: a new lecture every few days, assignments and quizzes on top.
+    A to-do list doesn't tell you <em>when</em>; a static timetable breaks the first time you miss something.</p>
+  <h3>The goal</h3>
+  <ul>
+    <li>Take the timetable, free time, subjects, exams, tasks and hobbies.</li>
+    <li>Generate "study this lecture" work from the timetable by itself.</li>
+    <li>Plan so work finishes as early as the student's daily limits allow, never past a deadline.</li>
+    <li>Re-plan instantly when anything changes, without reshuffling everything.</li>
+    <li>Always answer: <strong>what should I do next, and why?</strong></li>
+  </ul>
+  <div class="box tip">
+    <p><strong>How it evolved:</strong> v0.1 (29 Sep) was a generic "smart balanced scheduler" for tasks. On 30 Sep I
+      redesigned it for students (spec v0.2): work organised by <strong>subject</strong>, <strong>exams as dated milestones</strong>
+      rather than tasks, lectures generated from the timetable, and "as soon as possible" instead of "evenly
+      spread". Everything after that came from using it.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="features">
+  <h2>3. What it does</h2>
+  <div class="grid2">
+    <div class="box">
+      <p><strong>Planning</strong></p>
+      <ul>
+        <li>Week, month and (on a phone) one-day views of the plan.</li>
+        <li>"Next" card: the session to do now, with a reason ("CMO Midsem in 2 days").</li>
+        <li>Lecture items made automatically after each class (per subject, on/off).</li>
+        <li>Revision before each exam (default 6 h; quiz 1 h), in exam order.</li>
+        <li>Exam <em>focus window</em>: the 24 h before an exam is for that subject only.</li>
+        <li>Problems panel: what can't fit before its deadline, and by how much.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <p><strong>Day-to-day</strong></p>
+      <ul>
+        <li>Log a session (time worked, time left) or mark tasks done; undo for 15 s.</li>
+        <li>Cancel, move or add an extra class; edit exams, tasks, revision hours.</li>
+        <li>Fixed-time events (club, gym), hobbies with weekly targets.</li>
+        <li>Task types: study, assignment, other. Exams or quizzes.</li>
+        <li>Settings: paint free time on a weekly grid, daily max/min hours, session lengths.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <p><strong>Insight (from your own log)</strong></p>
+      <ul>
+        <li>Today tally, streaks, hours per day vs. your daily minimum.</li>
+        <li><strong>Exam effort</strong>: hours that went into each exam, by type of work.</li>
+        <li><strong>When you study</strong>: hours by hour of day and weekday; your best 3-hour stretch.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <p><strong>Where it runs</strong></p>
+      <ul>
+        <li>On your computer (desktop shortcut, no terminal).</li>
+        <li>On your phone over Wi-Fi: QR code in Settings, Add to Home screen.</li>
+        <li>Online demo on Render that saves nothing.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="demo">
+  <h2>4. Demo script (about 3 minutes)</h2>
+  <ol>
+    <li><strong>Week view on the laptop.</strong> "These are my real classes (grey), exams (red) and planned sessions in
+      each subject's colour. The shaded band is an exam focus window."</li>
+    <li><strong>Next card.</strong> "It always tells me what to do now and why."</li>
+    <li><strong>Log a session</strong> (click it → time worked, time left → Save). "It re-plans in a few seconds, and only
+      what changed moves: the rest of my week stays put."</li>
+    <li><strong>Subjects tab.</strong> Show a subject's weekly classes, the lecture items they generate, an exam, a task
+      with its type. "Exams are milestones: lectures before an exam count toward it automatically."</li>
+    <li><strong>Problems panel</strong> (if anything is listed). "It never squeezes work in silently: if 2 hours don't fit
+      before my midsem, it says so, and I can raise a day's limit or cut work."</li>
+    <li><strong>Stats.</strong> Exam effort (e.g. CMO Midsem ≈ 15 h) and When you study (22:00–01:00).</li>
+    <li><strong>Phone.</strong> Open the home-screen icon: "same planner, over Wi-Fi from my laptop".</li>
+    <li><strong>Live site.</strong> Open the demo, set a semester, add a subject: "anyone can try it; it saves nothing."</li>
+  </ol>
+  <div class="box warn">
+    <p><strong>Before the viva:</strong> open the live site once (the free server sleeps after 15 minutes and takes about a
+      minute to wake). Start HeadStart on the laptop and check the phone link in Settings on the room's network
+      (or use your phone hotspot).</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="arch">
+  <h2>5. Architecture</h2>
+  <div class="flow">
+    <span class="n">setup.json<br><span class="muted">timetable, subjects, exams, tasks, settings</span></span><span class="a">+</span>
+    <span class="n">progress.json<br><span class="muted">log of sessions, done, undo</span></span><span class="a">→</span>
+    <span class="n">load.py<br><span class="muted">validate, generate lectures and revision</span></span><span class="a">→</span>
+    <span class="n">engine.py<br><span class="muted">two-stage CP-SAT</span></span><span class="a">→</span>
+    <span class="n">plan.json / report<br><span class="muted">sessions, next, problems</span></span><span class="a">→</span>
+    <span class="n">app.py + index.html<br><span class="muted">Flask API, browser UI</span></span>
+  </div>
+  <dl class="facts">
+    <dt>Language</dt><dd>Python 3.12; the UI is one HTML file with plain JavaScript (no framework).</dd>
+    <dt>Solver</dt><dd>Google OR-Tools CP-SAT.</dd>
+    <dt>Server</dt><dd>Flask (laptop), waitress (online). Every change calls the solver and returns the new plan.</dd>
+    <dt>Storage</dt><dd>Two JSON files: the <strong>setup</strong> (what you told it) and an append-only <strong>progress log</strong>
+      (what you did). The plan is always recomputed from these, so nothing can get out of sync.</dd>
+    <dt>Key modules</dt><dd><code>models.py</code> (data classes), <code>load.py</code> (reading, lecture/revision
+      generation), <code>engine.py</code> (the optimiser), <code>progress.py</code> (applying the log),
+      <code>report.py</code> (next task, problems, deadlines), <code>insights.py</code> (Stats),
+      <code>setup_file.py</code> (UI edits written back to the setup), <code>planners.py</code>/<code>sync.py</code> (online site).</dd>
+  </dl>
+  <div class="box tip">
+    <p><strong>Why an append-only log?</strong> Undo is just removing an entry, every number on the Stats page can be
+      recomputed, and "what's left" of a task is the estimate adjusted by what was logged. It also made the data
+      features possible later: the log <em>is</em> the dataset.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="model">
+  <h2>6. The maths: modelling a semester</h2>
+  <h3>Time</h3>
+  <p>Time is cut into <strong>10-minute slots</strong> from now to the horizon (the latest exam or deadline, at least 7
+    days ahead). Free slots = study slots you painted − classes − exams − fixed events. Windows too short for any
+    session (e.g. 15 min between classes) are dropped. A real 5-week plan has about 2,300 free slots.</p>
+  <p class="muted">Why 10 minutes: fine enough for real schedules (a 50-min session, a 10-min break), coarse enough
+    that the model stays small. 1-minute slots would make it 10× bigger for no practical gain.</p>
+
+  <h3>Work</h3>
+  <p>Every piece of work is an <strong>item</strong> with a remaining need (in slots), an optional
+    <strong>finish-by</strong> (its due date, or the exam it counts toward), an optional <strong>available-from</strong>
+    (a lecture only after its class), and <strong>dependencies</strong>:</p>
+  <ul>
+    <li><strong>Hard</strong>: B can't start before A is done (always kept).</li>
+    <li><strong>Soft</strong>: e.g. revision after the lectures, or this exam's revision after the previous exam's:
+      kept unless that would break a deadline.</li>
+  </ul>
+
+  <h3>Decision variables (stage 1)</h3>
+  <span class="formula">a[u,d]  ∈ ℤ≥0   slots of item u planned on day d
+n[u,d]  ∈ ℤ≥0   number of sessions of u on day d
+z[u,d]  ∈ {0,1} u is used on day d
+h[k,d]  ∈ ℤ≥0   slots of flexible weekly activity k (hobby) on day d
+unscheduled[u], short_work[d], short_week[k,w], broken[e] : slack variables</span>
+
+  <h3>Constraints (all linear, or linear when a boolean is true)</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Rule</th><th>Constraint</th></tr>
+    <tr><td>All work is either planned or reported</td><td><code>Σ_d a[u,d] + unscheduled[u] = need[u]</code></td></tr>
+    <tr><td>Deadline / available-from</td><td><code>a[u,d]</code> only exists on days (and day-parts) where u may run</td></tr>
+    <tr><td>Session length</td><td><code>min_len·n[u,d] ≤ a[u,d] ≤ min(max_len, longest window)·n[u,d]</code></td></tr>
+    <tr><td>Day capacity (with breaks)</td><td><code>Σ_u a[u,d] + 1·Σ n[u,d] + Σ_k h[k,d] ≤ free[d] + 1</code></td></tr>
+    <tr><td>Daily study limit</td><td><code>Σ_u a[u,d] ≤ max_work[d]</code></td></tr>
+    <tr><td>Daily minimum (soft)</td><td><code>Σ_u a[u,d] + short_work[d] ≥ min_work[d]</code></td></tr>
+    <tr><td>Sessions per window</td><td><code>Σ n ≤ Σ_windows ⌊(len + break) / (shortest + break)⌋</code></td></tr>
+    <tr><td>Dependency A→B</td><td>if <code>z[B,d]</code> (and not <code>broken[e]</code>): <code>Σ_{d'≤d} a[A,d'] + unscheduled[A] ≥ need[A]</code></td></tr>
+    <tr><td>Weekly hobby target</td><td><code>Σ_{d∈week} h[k,d] + short_week[k,w] = target[k,w]</code></td></tr>
+  </table></div>
+
+  <h3>Objective: one weighted sum, priorities by weight</h3>
+  <span class="formula">minimise   10000·Σ unscheduled        (work that doesn't fit: worst)
+         +  1000·Σ short_week         (hobby targets missed)
+         +   500·need·Σ broken        (soft order broken)
+         +    50·Σ work in the 1-day buffer before a deadline
+         +    20·Σ short_work         (under the daily minimum)
+         +     5·Σ |a − average|      (uneven spread, steady items only)
+         +     1·Σ urgency·weight·(d − earliest day)·a[u,d]   (finish early)
+         +     1·Σ |a − previous plan|  (stability)</span>
+  <p>The weights are spaced so a higher goal always wins: one slot of unscheduled work (10,000) costs more than any
+    realistic amount of the goals below it. This is a practical stand-in for a lexicographic objective.</p>
+
+  <h3>Two linear-programming tricks used</h3>
+  <ul>
+    <li><strong>Absolute value</strong> (spread, stability): add <code>dev ≥ x − c</code> and <code>dev ≥ c − x</code> and
+      minimise <code>dev</code>; at the optimum <code>dev = |x − c|</code>.</li>
+    <li><strong>Conditional constraints</strong>: "only if z is true" (<code>OnlyEnforceIf</code> in CP-SAT), the solver's
+      version of the big-M trick, used for dependencies and broken soft edges.</li>
+    <li><strong>Slack variables</strong>: every goal that can fail has one, so the model is <em>always feasible</em> and
+      the non-zero slacks <em>are</em> the problem report ("2 h of DAA work doesn't fit before 12 Oct").</li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<section id="cpsat">
+  <h2>7. CP-SAT and optimisation background</h2>
+  <div class="test-card">
+    <h3>What kind of problem is this?</h3>
+    <p>A <strong>scheduling problem with deadlines, precedence and capacity</strong>: an integer optimisation problem.
+      In general such problems are <strong>NP-hard</strong> (they contain bin packing: fitting session-sized pieces into
+      windows of free time), so there is no known fast exact algorithm for every case. In practice, real instances of
+      this size solve in seconds with a good solver.</p>
+  </div>
+  <div class="test-card">
+    <h3>Why CP-SAT?</h3>
+    <ul>
+      <li>It handles <strong>integer and boolean variables</strong> natively, plus logical conditions ("if this task runs
+        today, its prerequisite is done"). Plain LP can't; MILP can but needs big-M tricks.</li>
+      <li>It combines <strong>constraint propagation</strong>, a <strong>SAT solver with clause learning</strong> (it learns why a
+        partial plan failed and never tries that combination again), and <strong>LP relaxations</strong> for bounds, running
+        several strategies in parallel workers.</li>
+      <li>It gives an <strong>optimality gap</strong>: the best plan found and a proven bound on how good any plan can be.
+        Stage 1 stops once within <strong>1%</strong> of the bound.</li>
+      <li>It's free, well maintained (Google OR-Tools) and fast for this size.</li>
+    </ul>
+  </div>
+  <div class="test-card">
+    <h3>Alternatives and why not</h3>
+    <div class="table-wrap"><table>
+      <tr><th>Approach</th><th>Why not (alone)</th></tr>
+      <tr><td>Greedy (earliest deadline first)</td><td>Fast but myopic: can't trade today vs. tomorrow, ignores session
+        lengths and breaks globally, can't prove a plan is impossible. I do use a greedy layout as a <em>fallback</em> and
+        as the solver's starting point.</td></tr>
+      <tr><td>Pure LP</td><td>Can't express "a session is 45–120 min" or "if… then…" without integers.</td></tr>
+      <tr><td>MILP (e.g. CBC/Gurobi)</td><td>Possible; CP-SAT is usually faster on scheduling with many booleans and
+        logical constraints, and is free.</td></tr>
+      <tr><td>Machine learning</td><td>Nothing to learn <em>from</em> at the start, and a plan must <em>guarantee</em> hard rules
+        (deadlines, limits); ML predicts, an optimiser guarantees.</td></tr>
+      <tr><td>One big model with every slot</td><td>Correct but huge: slot-level variables for every item over 5 weeks
+        is far bigger and too slow to re-plan on every click. Hence the two stages.</td></tr>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="engine">
+  <h2>8. The two-stage engine</h2>
+  <div class="grid2">
+    <div class="box">
+      <p><strong>Stage 1: allocate</strong> (the whole horizon at once)</p>
+      <p>Decides <em>how many minutes</em> of each item go on each day: deadlines, dependencies, daily limits,
+        hobbies, finishing early, stability. ~2,200 variables, ~3,800 constraints for a real 5-week semester;
+        optimal in about 1 s.</p>
+    </div>
+    <div class="box">
+      <p><strong>Stage 2: place</strong> (each day separately, in parallel)</p>
+      <p>Puts each day's minutes into exact 10-min slots: <code>x[p,s] = 1</code> if piece p is in slot s.
+        Sessions within min/max length, a break between different work, at most max-length of work before a break,
+        same-day dependency order, fewer and earlier sessions preferred. Largest day: ~800 variables.</p>
+    </div>
+  </div>
+  <h3>Stage 2 in maths</h3>
+  <span class="formula">Σ_p x[p,s] ≤ 1                       one thing per slot
+Σ_s x[p,s] + miss[p] = want[p]         place it all (or report)
+start[p,s] = x[p,s] − x[p,s−1]  ⇒  x[p,s..s+L−1] = 1     sessions ≥ L slots
+x[p,s] + x[q,s+1] ≤ 1   (p ≠ q, both work)            a break between
+Σ work in any (max_len+1) consecutive slots ≤ max_len  a break after max length
+minimise 100000·Σ miss + 100·Σ starts + Σ s·x + 20·Σ moved</span>
+
+  <h3>Feedback between the stages</h3>
+  <p>Stage 1 works with day totals, so occasionally a day's minutes don't fit into its actual windows (e.g. two
+    sessions that would need a gap that isn't there). Then stage 1 is solved again with that item <strong>capped on that
+    day</strong> at what did fit, and the rest moves to another day (up to 5 rounds; each round starts from the last
+    answer). This is a simple form of <strong>decomposition with feedback cuts</strong>. Usually one round is enough.</p>
+
+  <h3>Robustness (a real bug from using it)</h3>
+  <div class="box warn">
+    <p>On 7 Oct my whole day came out empty and planning took ~3 minutes. Cause: I'd set a 13 h limit on a day with
+      only ~11 h free, so the day was packed to ~91%; stage 2 ran out of its 2 s search time with nothing found, and
+      the code treated "no answer yet" as "nothing fits", capping the day at zero. Fix: a <strong>rule-respecting greedy
+      layout</strong> is kept whenever the search times out (never an empty day), and each re-plan round is
+      <strong>warm-started</strong> from the previous one. Re-plans went from ~193 s to ~35–50 s; today a full re-plan is ~5 s.</p>
+  </div>
+
+  <h3>Stable re-plans</h3>
+  <p>Without care, every re-plan could reshuffle the whole week, which is useless to a student. So the previous plan
+    is a <strong>hint</strong> (the search starts from it) and moving work costs a little: 1 per slot moved between days in
+    stage 1, 20 per slot moved within a day in stage 2. Result: re-planning with nothing changed moves nothing; a done
+    task, new task or cancelled class changes only what it has to.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="decisions">
+  <h2>9. Design decisions (and why)</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Decision</th><th>Why</th></tr>
+    <tr><td><strong>As soon as possible</strong>, not evenly spread</td><td>Work keeps arriving; free time today is needed
+      tomorrow. Front-loading builds a lead that absorbs missed sessions. Each slot later costs more, weighted by
+      urgency (1–5 by days to deadline).</td></tr>
+    <tr><td>Target finish <strong>1 day before</strong> the deadline</td><td>A buffer for the unexpected; working inside it is
+      allowed but penalised. Revision has no buffer: the evening before an exam is when revision happens.</td></tr>
+    <tr><td><strong>Exams are milestones</strong>, not tasks</td><td>An exam is a date; the work for it is lectures, assignments
+      and revision that point to it. Lectures before an exam count toward it automatically.</td></tr>
+    <tr><td>Exam <strong>focus window</strong> (24 h)</td><td>The day before an exam is only for that subject; two close exams
+      each keep their own stretch.</td></tr>
+    <tr><td><strong>Never overload</strong></td><td>The daily limit is never exceeded. If work doesn't fit, it is reported,
+      never silently squeezed in.</td></tr>
+    <tr><td>Two files + log, recompute the plan</td><td>Simple, debuggable, undo for free, data for Stats.</td></tr>
+    <tr><td><strong>Online = demo only</strong></td><td>I didn't want to store other students' schedules. Per-user online
+      planners were built (14 Oct) and deliberately removed. Real use runs locally; data stays on your device.</td></tr>
+    <tr><td>Phone via the laptop (Wi-Fi), not the cloud</td><td>Same privacy reason; the phone is a second screen for the same
+      planner.</td></tr>
+    <tr><td>Removed "Your pace"</td><td>I built a feature that learned how long tasks really take, used it, found it wasn't
+      useful in practice, and removed it. Data showed my estimates were already close (e.g. RP lectures: plan 1h30,
+      take 1h32).</td></tr>
+  </table></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="results">
+  <h2>10. Real use and results</h2>
+  <div class="box key">
+    <p><strong>Used it daily for about two weeks of midsems</strong> (from 30 Sep), and through the semester after.
+      Fixes came from real problems, not imagined ones: an empty day (solver timeout), a "Mark done" crash, an exam
+      saved as 2016, Chrome refusing http on the phone.</p>
+  </div>
+  <h3>Outcome</h3>
+  <ul>
+    <li><strong>CMO midsem: 16.5/40 → 32/45</strong> (median 23). Honest framing: one student, one subject, a different
+      exam, so it shows an association, not proof. My log shows <strong>~15 h 25 min</strong> logged toward that midsem
+      (≈9 h lectures and study, 6 h 30 revision), steady rather than crammed.</li>
+    <li>When I study: mostly <strong>22:00–01:00</strong>, with a second peak around 18:00–20:00.</li>
+  </ul>
+  <h3>The real lesson</h3>
+  <div class="box tip">
+    <p>I often didn't follow the exact order of sessions, and that was fine. The value was the <strong>forecast</strong>:
+      which subject needs attention, how much must be done by when, and when I'd finish at my current pace. That
+      creates urgency early, before a deadline becomes a crisis. <strong>The plan is a forecast, not a timetable.</strong></p>
+  </div>
+  <h3>Messy real data</h3>
+  <p>I fell ill before DAA and covered several tasks during revision, then marked them done with almost no time
+    logged. Any "learning" from the log has to recognise such items as <em>covered elsewhere</em> (under 25% of the
+    estimate logged) instead of concluding I'm 5× faster.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="deploy">
+  <h2>11. Deployment and phone</h2>
+  <dl class="facts">
+    <dt>Live site</dt><dd><a href="https://headstart-1g49.onrender.com">headstart-1g49.onrender.com</a>: Render free plan,
+      Docker, Singapore region, India time zone, waitress server.</dd>
+    <dt>What it serves</dt><dd>A home page, and a shared demo at <code>/p/demo/</code> with Reset; never saved (a restart
+      wipes it).</dd>
+    <dt>Per-planner routing</dt><dd>A small WSGI layer turns <code>/p/&lt;id&gt;/api/…</code> into <code>/api/…</code> for that
+      planner's folder, so every feature works per planner without rewriting the app.</dd>
+    <dt>Public repo</dt><dd>A clean copy (code, docs, Dockerfile; no personal data or history).</dd>
+    <dt>Why not Hugging Face</dt><dd>Docker Spaces turned out to need a paid plan, found when deploying; Render's free
+      plan works but sleeps after 15 min idle (about a minute to wake).</dd>
+    <dt>Phone</dt><dd><code>python app.py --lan</code> serves on the computer's network; Settings shows a QR code; the page has
+      a web-app manifest and icon for Add to Home screen and a one-day layout under 700 px. Plain http on a local
+      network, so Chrome warns; works on college Wi-Fi and the phone's own hotspot.</dd>
+  </dl>
+</section>
+
+<!-- ============================================================ -->
+<section id="limits">
+  <h2>12. Limitations (know these cold)</h2>
+  <ul>
+    <li><strong>Estimates are the user's.</strong> HeadStart doesn't learn task durations (a pace feature was tried and
+      removed); bad estimates mean a wrong forecast.</li>
+    <li><strong>Tested by one user</strong> (me). No user study yet.</li>
+    <li><strong>Sessions never cross midnight</strong>; a slot to 24:00 and one from 00:00 are separate days.</li>
+    <li><strong>Two-stage decomposition</strong> can miss the true global optimum in rare cases (fixed by feedback rounds,
+      not proven optimal overall). Stage 1 stops at a 1% gap.</li>
+    <li><strong>Weights, not true lexicographic</strong> priorities: chosen to be far apart, but in theory a huge amount of
+      a lower goal could outweigh a higher one.</li>
+    <li><strong>No login or sync</strong>: real use is one computer; the phone needs the laptop on and the same network.
+      Plain http locally.</li>
+    <li><strong>Free hosting</strong> sleeps (≈1 min wake) and is slow for large planners.</li>
+    <li><strong>Setup needs Python</strong> (about 60–80 MB of packages, mainly OR-Tools).</li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<section id="questions">
+  <h2>13. Viva questions</h2>
+  <div class="qa-tools">
+    <input type="search" id="qsearch" placeholder="Search questions and answers…" aria-label="Search questions">
+    <button type="button" id="openAll">Expand all</button>
+    <button type="button" id="closeAll">Collapse all</button>
+  </div>
+  <div class="qbank">
+
+  <div class="qgroup"><h3>The project</h3>
+    <details class="qa"><summary>What problem does HeadStart solve, and for whom?</summary><div class="a">
+      <p>Students who want to study regularly but don't know how much time to give each subject, waste time making
+        schedules, or give up when a plan breaks. HeadStart turns classes, exams, assignments and free time into a plan
+        that meets every deadline within daily limits, and re-plans whenever something changes.</p></div></details>
+    <details class="qa"><summary>How is it different from Google Calendar or a to-do app?</summary><div class="a">
+      <p>Those store what <em>you</em> schedule. HeadStart <em>decides</em> the schedule: it knows how much work is left, the
+        deadlines and your free time, and solves for a plan. It also generates lecture study from your timetable,
+        warns when work can't fit, and re-plans automatically.</p></div></details>
+    <details class="qa"><summary>Did it actually help you?</summary><div class="a">
+      <p>Yes: my CMO midsem went from 16.5/40 to 32/45 (median 23). It's one student and a different exam, so it's
+        an association, not proof. My log shows ~15 h of steady study toward it. The biggest help was the workload
+        forecast creating urgency early.</p></div></details>
+    <details class="qa"><summary>Is it too personal to help others?</summary><div class="a">
+      <p>The problem is universal; my preferences are settings: free-time grid, daily limits, lectures on/off per
+        subject, session lengths, task types. Anyone can set up their own semester from the first screen. It hasn't been
+        tested by other students yet, which is the honest next step.</p></div></details>
+    <details class="qa"><summary>What would you do next?</summary><div class="a">
+      <ul><li>Let 3–5 classmates use it for a week and collect feedback.</li>
+        <li>Strengthen the forecast: "you're 3 h behind on DAA this week".</li>
+        <li>Accounts and sync if it became a product (a cloud database and a paid server).</li></ul></div></details>
+  </div>
+
+  <div class="qgroup"><h3>Maths and optimisation</h3>
+    <details class="qa"><summary>How did you model planning mathematically?</summary><div class="a">
+      <p>As an integer optimisation problem on a 10-minute grid. Variables are how many slots of each item go on each
+        day (stage 1) and which slot each piece takes (stage 2). Constraints are linear: deadlines, capacity with
+        breaks, daily limits, session lengths, dependencies. The objective is a weighted sum: unscheduled work is
+        worst, then missed hobby targets, broken order, using the buffer, under-minimum days, unevenness, lateness
+        and moving things from the previous plan.</p></div></details>
+    <details class="qa"><summary>What is CP-SAT and how does it work?</summary><div class="a">
+      <p>Google OR-Tools' constraint programming solver. It encodes integer variables and constraints so a SAT solver
+        with clause learning can search, adds propagation and LP relaxations for bounds, and runs several strategies in
+        parallel. It returns the best plan found and a proven bound, so it can say "optimal" or "within 1%".</p></div></details>
+    <details class="qa"><summary>Is the problem NP-hard? Then how is it fast?</summary><div class="a">
+      <p>In general yes: it contains bin packing (fitting session-sized pieces into windows). But NP-hard means no
+        fast algorithm for <em>every</em> instance; real instances of this size (a few thousand variables) solve in about a
+        second. I also keep models small: day totals in stage 1, per-day models in stage 2.</p></div></details>
+    <details class="qa"><summary>Why two stages instead of one model?</summary><div class="a">
+      <p>A single slot-level model over five weeks is very large and too slow to re-solve on every click. Splitting
+        "how much per day" from "exactly when in the day" keeps each part small, lets the 35 days solve in parallel, and
+        a feedback loop (cap a day at what fit, re-solve) handles the rare mismatch. The trade-off: no proof of a global
+        optimum.</p></div></details>
+    <details class="qa"><summary>How do you handle "impossible" plans, e.g. too much work?</summary><div class="a">
+      <p>Every goal that can fail has a <strong>slack variable</strong> with a large cost, so the model is always feasible.
+        Non-zero slacks become the problem report, e.g. "2 h of work doesn't fit before Oct 12; raise a day's limit or
+        cut work". Nothing is ever squeezed in beyond your limits.</p></div></details>
+    <details class="qa"><summary>How do you represent |x − c| in a linear model?</summary><div class="a">
+      <p>Add a variable <code>dev</code> with <code>dev ≥ x − c</code> and <code>dev ≥ c − x</code>, and minimise it. I use this
+        for even spread (steady items) and for stability (distance from the previous plan).</p></div></details>
+    <details class="qa"><summary>How do the objective weights work? Why those numbers?</summary><div class="a">
+      <p>They encode priorities: 10,000 for unscheduled work down to 1 for lateness and moving work. They are spaced so a
+        higher goal always dominates in realistic plans, approximating a lexicographic objective in one solve. The
+        exact values were tuned by using it (e.g. moving within a day costs 20, more than starting earlier saves).</p></div></details>
+    <details class="qa"><summary>How is "as soon as possible" expressed?</summary><div class="a">
+      <p>Each slot of item u on day d costs <code>(d − earliest day) × urgency × subject weight</code>. Urgency is 5 for a
+        deadline within 3 days down to 1 beyond 4 weeks, so urgent work is pulled earliest.</p></div></details>
+    <details class="qa"><summary>How are dependencies modelled?</summary><div class="a">
+      <p>If B is used on day d, everything of A must be done by the end of d:
+        <code>Σ_{d'≤d} a[A,d'] + unscheduled[A] ≥ need[A]</code>, enforced only if B runs that day. A soft dependency has
+        a boolean <code>broken</code> that switches it off at a cost of 500 per slot; same-day order is handled in stage 2.</p></div></details>
+    <details class="qa"><summary>What does the 1% gap mean?</summary><div class="a">
+      <p>Stage 1 stops once the plan's cost is proven within 1% of the best possible. Proving the last 1% took 3–4× as
+        long and only moved work by minutes, so it isn't worth it on every click.</p></div></details>
+    <details class="qa"><summary>Why a 10-minute grid?</summary><div class="a">
+      <p>Real sessions and breaks are multiples of 10 minutes; a finer grid multiplies variables (1-min would be 10×)
+        with no practical benefit.</p></div></details>
+  </div>
+
+  <div class="qgroup"><h3>Engineering</h3>
+    <details class="qa"><summary>What happens if the solver runs out of time?</summary><div class="a">
+      <p>Stage 1 returns its best plan so far (always feasible thanks to slacks). Stage 2 keeps a rule-respecting greedy
+        layout or the solver's answer, whichever placed more, never an empty day. That rule came from a real bug where
+        a packed day came out empty.</p></div></details>
+    <details class="qa"><summary>How do you keep re-plans stable?</summary><div class="a">
+      <p>The previous plan is a hint for the solver and a small cost is paid for every slot moved (1 between days,
+        20 within a day). Re-planning with nothing changed moves nothing.</p></div></details>
+    <details class="qa"><summary>How did you test it?</summary><div class="a">
+      <p>Daily real use; scripted checks that every planned day obeys the stage-2 rules (session lengths, breaks, order,
+        allowed slots); end-to-end tests through the web API on copies of my data; and a headless browser driving the
+        real pages (including a phone-sized screen) to click through features and take screenshots.</p></div></details>
+    <details class="qa"><summary>Why JSON files and not a database?</summary><div class="a">
+      <p>One user, small data, human-readable, easy to back up and diff in git. The plan is recomputed from the setup and
+        the progress log, so there's no state to corrupt. A multi-user product would need a database.</p></div></details>
+    <details class="qa"><summary>How fast is it?</summary><div class="a">
+      <p>For my real semester: stage 1 has ~2,200 variables and ~3,800 constraints, solved optimally in ~1 s; 35 day
+        models in parallel; a full re-plan in about 5 s on my laptop. Small planners re-plan in about a second.</p></div></details>
+  </div>
+
+  <div class="qgroup"><h3>Data and insights</h3>
+    <details class="qa"><summary>What does HeadStart learn from your data?</summary><div class="a">
+      <p>It reports, rather than learns: hours per day, streaks, effort per exam by type of work, and when in the day
+        you study. I built a "pace" feature that learned real task durations, found it wasn't useful in practice (my
+        estimates were already close), and removed it.</p></div></details>
+    <details class="qa"><summary>How does "When you study" work?</summary><div class="a">
+      <p>A log entry is saved when a session ends, so the session is taken to start "time spent" earlier, and its
+        minutes are spread over the hours it covered. It counts hours, not sessions, and finds the 3-hour window (wrapping
+        past midnight) with the most study. It's approximate, and the page says so.</p></div></details>
+    <details class="qa"><summary>How did you handle messy data?</summary><div class="a">
+      <p>Tasks I marked done with under 25% of their estimate logged (covered during revision while ill) were treated
+        as "covered elsewhere" rather than as evidence I'm faster.</p></div></details>
+  </div>
+
+  <div class="qgroup"><h3>Deployment, privacy, security</h3>
+    <details class="qa"><summary>Is it really deployed if the site is only a demo?</summary><div class="a">
+      <p>Yes: the full app runs in production on Render. Limiting the public site to a demo was a deliberate privacy
+        decision; per-user online planners were built and removed. Anyone can run their own copy from GitHub.</p></div></details>
+    <details class="qa"><summary>What data do you store?</summary><div class="a">
+      <p>Online: nothing persistent from visitors (the demo is wiped on restart). Locally: your setup and progress log
+        only. No accounts, names, emails, cookies or analytics.</p></div></details>
+    <details class="qa"><summary>How does the phone version work, and is it secure?</summary><div class="a">
+      <p>The laptop serves HeadStart on the local network (<code>--lan</code>); the phone opens it via a QR code and adds it
+        to the home screen. It's the same planner, no copy. It's plain http without login, so it's meant for a private
+        network like a phone hotspot; anyone on the same network with the address could open it.</p></div></details>
+    <details class="qa"><summary>Why Render and not Hugging Face or another host?</summary><div class="a">
+      <p>Hugging Face Docker Spaces turned out to need a paid plan; Render's free plan runs Docker with no card. The
+        catch is sleeping after 15 minutes idle and a slow CPU. For a real product I'd use a paid instance.</p></div></details>
+    <details class="qa"><summary>How would you scale it to many students?</summary><div class="a">
+      <p>Accounts and a database instead of files; a job queue so solves don't block the web server; a paid instance
+        with more CPU (each solve is seconds of CPU); caching plans and re-solving only on change, which it already does.</p></div></details>
+  </div>
+
+  <div class="qgroup"><h3>Using AI (Claude Code)</h3>
+    <details class="qa"><summary>How much of this did AI write, and what did you do?</summary><div class="a">
+      <p>Claude Code wrote most of the code. I owned the product: the student-centred redesign, exams as milestones,
+        auto lectures, as-soon-as-possible planning, the demo-only privacy decision, phone use, and removing features
+        that didn't help. I used it every day and found the real bugs by using it. The full conversation is in my
+        transcript.</p></div></details>
+    <details class="qa"><summary>Give an example where you changed the AI's direction.</summary><div class="a">
+      <p>The online version went from "anyone can start a planner" to "demo only", because I didn't want to store
+        others' data. Another: the solver's warnings ("10 min doesn't fit") looked false; investigating showed a real
+        2-hour shortfall before my midsems, and I raised one day's limit.</p></div></details>
+  </div>
+
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="numbers">
+  <h2>14. Numbers to remember</h2>
+  <div class="table-wrap"><table>
+    <tr><th>What</th><th>Value</th></tr>
+    <tr><td>Time grid</td><td class="num">10-minute slots</td></tr>
+    <tr><td>Real semester model (stage 1)</td><td class="num">~2,200 variables · ~3,800 constraints · ~1 s, optimal</td></tr>
+    <tr><td>Stage 2</td><td class="num">one model per day, in parallel; largest ~800 variables</td></tr>
+    <tr><td>Full re-plan (5 weeks, 5 subjects)</td><td class="num">~5 s on a laptop</td></tr>
+    <tr><td>Stage 1 stop</td><td class="num">within 1% of optimal</td></tr>
+    <tr><td>Stage 2 search time</td><td class="num">2 s per day, 10 s retry; up to 5 feedback rounds</td></tr>
+    <tr><td>Objective weights</td><td class="num">10000 · 1000 · 500 · 50 · 20 · 5 · 1</td></tr>
+    <tr><td>Defaults</td><td class="num">sessions 45–120 min · 10-min breaks · revision 6 h (quiz 1 h) · 24 h focus · 1-day buffer</td></tr>
+    <tr><td>CMO midsem</td><td class="num">16.5/40 → 32/45 (median 23)</td></tr>
+    <tr><td>Logged toward CMO midsem</td><td class="num">~15 h 25 min</td></tr>
+    <tr><td>Most-studied hours</td><td class="num">22:00–01:00</td></tr>
+    <tr><td>Code</td><td class="num">~5,700 lines (Python + HTML/JS)</td></tr>
+    <tr><td>Timeline</td><td class="num">spec 29 Sep · v0.2 30 Sep · real use from 30 Sep · deployed 14 Oct · phone 26 Oct</td></tr>
+  </table></div>
+</section>
+</main>
+</div>
+<script>
+  (function () {
+    var qas = Array.prototype.slice.call(document.querySelectorAll("details.qa"));
+    document.getElementById("openAll").onclick = function () { qas.forEach(function (d) { d.open = true; }); };
+    document.getElementById("closeAll").onclick = function () { qas.forEach(function (d) { d.open = false; }); };
+    var search = document.getElementById("qsearch");
+    search.addEventListener("input", function () {
+      var q = search.value.trim().toLowerCase();
+      qas.forEach(function (d) {
+        d.classList.toggle("hidden", q !== "" && d.textContent.toLowerCase().indexOf(q) === -1);
+      });
+      document.querySelectorAll(".qgroup").forEach(function (g) {
+        var visible = g.querySelectorAll("details.qa:not(.hidden)").length > 0;
+        g.classList.toggle("hidden", !visible);
+      });
+    });
+    var root = document.documentElement;
+    try { var saved = localStorage.getItem("theme"); if (saved) root.setAttribute("data-theme", saved); } catch (e) {}
+    document.getElementById("theme").onclick = function () {
+      var cur = root.getAttribute("data-theme") ||
+        (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      var next = cur === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("theme", next); } catch (e) {}
+    };
+  })();
+</script>
+</body>
+</html>
